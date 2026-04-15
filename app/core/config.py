@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     working_hours_start: int = 9   # 09:00 local time
     working_hours_end: int = 19    # 19:00 local time
     appointment_duration_minutes: int = 60
+    # 0=Mon … 6=Sun; set via JSON env var e.g. WORKING_DAYS='[0,1,2,3,4,5]'
+    working_days: list[int] = [0, 1, 2, 3, 4, 5]  # Mon–Sat
+    app_timezone: str = "Asia/Almaty"
 
     @field_validator("database_url")
     @classmethod
