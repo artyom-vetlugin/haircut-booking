@@ -34,7 +34,7 @@ class TelegramBotClient:
 
     def _register_handlers(self, app: Application) -> None:  # type: ignore[type-arg]
         # Lazy import to avoid any module-level circular dependency risk.
-        from telegram.ext import CommandHandler, MessageHandler, filters
+        from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
         from app.core.constants import (
             BTN_BOOK,
@@ -61,6 +61,8 @@ class TelegramBotClient:
         app.add_handler(
             MessageHandler(filters.Text([BTN_CONTACT_MASTER]), handlers.handle_contact_master)
         )
+        # Inline keyboard callbacks (booking state machine)
+        app.add_handler(CallbackQueryHandler(handlers.handle_callback))
         # Catch-all for unrecognised text (must be registered last)
         app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_unknown)
