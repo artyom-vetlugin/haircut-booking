@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Internal Pydantic models representing raw Google Calendar API shapes.
 
 These models mirror the JSON structures returned by the MCP server tools and
@@ -7,7 +9,7 @@ Nothing outside this package should import from here.
 Use CalendarEvent and BusyInterval from calendar_adapter / availability instead.
 """
 
-from __future__ import annotations
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -16,10 +18,10 @@ class MCPEventDateTime(BaseModel):
     """Google Calendar dateTime or date field."""
 
     # ISO 8601 with UTC offset — absent for all-day events.
-    dateTime: str | None = None
+    dateTime: Optional[str] = None
     # YYYY-MM-DD — set for all-day events only.
-    date: str | None = None
-    timeZone: str | None = None
+    date: Optional[str] = None
+    timeZone: Optional[str] = None
 
 
 class MCPEvent(BaseModel):
@@ -34,7 +36,7 @@ class MCPEvent(BaseModel):
 
     id: str
     summary: str
-    description: str | None = None
+    description: Optional[str] = None
     start: MCPEventDateTime
     end: MCPEventDateTime
     # confirmed | tentative | cancelled

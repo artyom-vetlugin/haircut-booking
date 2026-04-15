@@ -96,6 +96,12 @@ class FakeCalendarAdapter(CalendarAdapter):
     async def delete_event(self, event_id: str) -> None:
         self.events.pop(event_id, None)
 
+    async def list_events(self, start: datetime, end: datetime) -> list[CalendarEvent]:
+        return [
+            e for e in self.events.values()
+            if e.start_at < end and e.end_at > start
+        ]
+
     async def get_busy_intervals(
         self, start: datetime, end: datetime
     ) -> list[BusyInterval]:
@@ -108,6 +114,9 @@ class FakeCalendarAdapter(CalendarAdapter):
 
 class FailingCalendarAdapter(CalendarAdapter):
     """Calendar adapter that always raises a generic exception."""
+
+    async def list_events(self, start_at, end_at):
+        raise RuntimeError("calendar unavailable")
 
     async def create_event(self, start_at, end_at, title, description=None):
         raise RuntimeError("calendar unavailable")
