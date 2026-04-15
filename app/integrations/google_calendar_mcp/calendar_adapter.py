@@ -52,6 +52,12 @@ class CalendarAdapter(ABC):
         """Permanently remove a calendar event."""
 
     @abstractmethod
+    async def list_events(
+        self, start: datetime, end: datetime
+    ) -> list[CalendarEvent]:
+        """Return all calendar events whose start falls within [start, end)."""
+
+    @abstractmethod
     async def get_busy_intervals(
         self, start: datetime, end: datetime
     ) -> list[BusyInterval]:

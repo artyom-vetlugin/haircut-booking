@@ -8,3 +8,4 @@ pydantic-settings==2.7.0
 httpx==0.28.1
 python-multipart==0.0.20
 python-telegram-bot==21.11.1
+mcp>=1.0.0

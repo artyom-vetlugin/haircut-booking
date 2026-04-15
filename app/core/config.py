@@ -26,8 +26,14 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-6"
 
-    # Google Calendar (populated when calendar integration is added)
+    # Google Calendar — google_calendar_id is the dedicated appointments calendar.
+    # The OAuth2 credentials below are required by the MCP server process.
+    # Obtain them by completing the Google OAuth2 consent flow:
+    # https://developers.google.com/calendar/api/guides/auth
     google_calendar_id: str = ""
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_refresh_token: str = ""
 
     # Booking rules — all configurable via environment
     booking_horizon_days: int = 30

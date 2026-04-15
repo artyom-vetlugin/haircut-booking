@@ -53,6 +53,11 @@ class StubCalendarAdapter(CalendarAdapter):
     async def delete_event(self, event_id: str) -> None:
         pass
 
+    async def list_events(
+        self, start: datetime, end: datetime
+    ) -> list[CalendarEvent]:
+        return []
+
     async def get_busy_intervals(
         self, start: datetime, end: datetime
     ) -> list[BusyInterval]:
