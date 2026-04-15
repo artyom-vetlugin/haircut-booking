@@ -6,15 +6,16 @@ from fastapi import FastAPI
 from app.api import api_router
 from app.core.config import settings
 from app.core.logging import configure_logging
+from app.integrations.telegram.client import bot_client
 
 configure_logging(debug=settings.debug)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # Startup tasks (DB pool warm-up, external service checks, etc.) go here.
+    await bot_client.initialize()
     yield
-    # Shutdown tasks (graceful connection cleanup, etc.) go here.
+    await bot_client.shutdown()
 
 
 def create_app() -> FastAPI:
