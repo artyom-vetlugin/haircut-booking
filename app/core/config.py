@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str
     telegram_master_chat_id: int
     telegram_webhook_secret: str = ""
+    telegram_webhook_url: str = ""
 
     # Anthropic Claude (populated when Claude integration is added)
     anthropic_api_key: str = ""

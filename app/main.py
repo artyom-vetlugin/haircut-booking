@@ -14,6 +14,11 @@ configure_logging(debug=settings.debug)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await bot_client.initialize()
+    if settings.telegram_webhook_url:
+        await bot_client.register_webhook(
+            settings.telegram_webhook_url,
+            settings.telegram_webhook_secret,
+        )
     yield
     await bot_client.shutdown()
 

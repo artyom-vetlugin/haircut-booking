@@ -77,3 +77,50 @@ async def test_webhook_calls_process_update() -> None:
             await client.post("/webhook/telegram", json={"update_id": 5})
 
     bot_client.process_update.assert_awaited_once_with({"update_id": 5})  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_startup_registers_webhook_when_url_configured() -> None:
+    """When TELEGRAM_WEBHOOK_URL is set, register_webhook is called during lifespan startup."""
+    from unittest.mock import AsyncMock
+
+    import app.main as app_main
+    from app.integrations.telegram.client import bot_client
+
+    register_mock = AsyncMock()
+    with (
+        patch.object(bot_client, "register_webhook", register_mock),
+        patch("app.main.settings") as mock_settings,
+    ):
+        mock_settings.telegram_webhook_url = "https://example.ngrok-free.app"
+        mock_settings.telegram_webhook_secret = "secret"
+
+        # Invoke lifespan directly — ASGITransport does not trigger it
+        async with app_main.lifespan(app_main.app):
+            pass
+
+    register_mock.assert_awaited_once_with(
+        "https://example.ngrok-free.app",
+        "secret",
+    )
+
+
+@pytest.mark.asyncio
+async def test_startup_skips_webhook_when_url_empty() -> None:
+    """When TELEGRAM_WEBHOOK_URL is empty, register_webhook is not called."""
+    from unittest.mock import AsyncMock
+
+    import app.main as app_main
+    from app.integrations.telegram.client import bot_client
+
+    register_mock = AsyncMock()
+    with (
+        patch.object(bot_client, "register_webhook", register_mock),
+        patch("app.main.settings") as mock_settings,
+    ):
+        mock_settings.telegram_webhook_url = ""
+
+        async with app_main.lifespan(app_main.app):
+            pass
+
+    register_mock.assert_not_called()

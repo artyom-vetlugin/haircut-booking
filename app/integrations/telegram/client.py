@@ -66,6 +66,15 @@ class TelegramBotClient:
             MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_unknown)
         )
 
+    async def register_webhook(self, base_url: str, secret: str = "") -> None:
+        """Call Telegram's setWebhook so updates are pushed to this server."""
+        url = f"{base_url.rstrip('/')}/webhook/telegram"
+        kwargs: dict = {"url": url}
+        if secret:
+            kwargs["secret_token"] = secret
+        await self.application.bot.set_webhook(**kwargs)
+        logger.info("Telegram webhook registered at %s", url)
+
     async def process_update(self, data: dict) -> None:  # type: ignore[type-arg]
         from telegram import Update
 
