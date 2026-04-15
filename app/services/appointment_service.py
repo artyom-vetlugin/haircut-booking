@@ -12,8 +12,11 @@ Business rules enforced here:
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from app.core.exceptions import (
     BookingConflictError,
@@ -27,6 +30,7 @@ from app.integrations.google_calendar_mcp.calendar_adapter import CalendarAdapte
 from app.repositories.appointment import AppointmentRepository
 from app.repositories.audit_log import AuditLogRepository
 from app.services.booking_rules_service import BookingRulesService
+from app.services.notification_service import NotificationService
 
 _APPOINTMENT_TITLE = "Стрижка"
 
@@ -38,11 +42,13 @@ class AppointmentService:
         rules: BookingRulesService,
         appointments: AppointmentRepository,
         audit: AuditLogRepository,
+        notification: NotificationService | None = None,
     ) -> None:
         self._calendar = calendar_adapter
         self._rules = rules
         self._appointments = appointments
         self._audit = audit
+        self._notification = notification
 
     # ------------------------------------------------------------------
     # Read
@@ -125,6 +131,16 @@ class AppointmentService:
             },
         )
 
+        # 7. Notify master (never let notification failures abort the booking)
+        if self._notification is not None:
+            try:
+                await self._notification.notify_booking_created(
+                    start_at=slot_start,
+                    actor_id=actor_id,
+                )
+            except Exception:
+                logger.exception("Master notification failed for booking created %s", appointment.id)
+
         return appointment
 
     async def reschedule_booking(
@@ -193,6 +209,17 @@ class AppointmentService:
             },
         )
 
+        # 7. Notify master (never let notification failures abort the reschedule)
+        if self._notification is not None:
+            try:
+                await self._notification.notify_booking_rescheduled(
+                    old_start_at=old_start,
+                    new_start_at=new_slot_start,
+                    actor_id=actor_id,
+                )
+            except Exception:
+                logger.exception("Master notification failed for reschedule %s", appointment.id)
+
         return appointment
 
     async def cancel_booking(
@@ -238,6 +265,16 @@ class AppointmentService:
             action="cancelled",
             payload_json={"reason": reason},
         )
+
+        # 5. Notify master (never let notification failures abort the cancellation)
+        if self._notification is not None:
+            try:
+                await self._notification.notify_booking_cancelled(
+                    start_at=appointment.start_at,
+                    actor_id=actor_id,
+                )
+            except Exception:
+                logger.exception("Master notification failed for cancellation %s", appointment.id)
 
         return appointment
 

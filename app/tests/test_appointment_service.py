@@ -161,6 +161,7 @@ def _make_service(
     calendar: CalendarAdapter | None = None,
     active_appointment: Appointment | None = None,
     overlapping: list[Appointment] | None = None,
+    notification: object | None = None,
 ) -> tuple[AppointmentService, MagicMock, MagicMock]:
     """Return (service, appointments_repo_mock, audit_repo_mock)."""
     cal = calendar or FakeCalendarAdapter()
@@ -180,8 +181,17 @@ def _make_service(
         rules=rules,
         appointments=appointments,
         audit=audit,
+        notification=notification,  # type: ignore[arg-type]
     )
     return service, appointments, audit
+
+
+def _make_notification_mock() -> MagicMock:
+    n = MagicMock()
+    n.notify_booking_created = AsyncMock()
+    n.notify_booking_rescheduled = AsyncMock()
+    n.notify_booking_cancelled = AsyncMock()
+    return n
 
 
 # ---------------------------------------------------------------------------
@@ -506,3 +516,84 @@ class TestCancelBooking:
 
         update_kwargs = repo.update.call_args.kwargs
         assert update_kwargs["cancel_reason"] is None
+
+
+# ---------------------------------------------------------------------------
+# Notification integration
+# ---------------------------------------------------------------------------
+
+
+class TestNotifications:
+    @pytest.mark.asyncio
+    async def test_create_booking_calls_notify(self):
+        notif = _make_notification_mock()
+        service, _, _ = _make_service(notification=notif)
+
+        await service.create_booking(CLIENT_ID, VALID_SLOT, ACTOR_ID, now=FIXED_NOW)
+
+        notif.notify_booking_created.assert_awaited_once()
+        call_kwargs = notif.notify_booking_created.call_args.kwargs
+        assert call_kwargs["start_at"] == VALID_SLOT
+        assert call_kwargs["actor_id"] == ACTOR_ID
+
+    @pytest.mark.asyncio
+    async def test_reschedule_booking_calls_notify(self):
+        from datetime import timedelta
+
+        cal = FakeCalendarAdapter()
+        event = await cal.create_event(VALID_SLOT, VALID_SLOT + timedelta(hours=1), "Стрижка")
+        appt = _make_appointment(google_event_id=event.event_id)
+        new_slot = datetime(2026, 4, 22, 11, 0, tzinfo=TZ)
+
+        notif = _make_notification_mock()
+        service, _, _ = _make_service(calendar=cal, active_appointment=appt, notification=notif)
+
+        await service.reschedule_booking(CLIENT_ID, new_slot, ACTOR_ID, now=FIXED_NOW)
+
+        notif.notify_booking_rescheduled.assert_awaited_once()
+        call_kwargs = notif.notify_booking_rescheduled.call_args.kwargs
+        assert call_kwargs["old_start_at"] == VALID_SLOT
+        assert call_kwargs["new_start_at"] == new_slot
+        assert call_kwargs["actor_id"] == ACTOR_ID
+
+    @pytest.mark.asyncio
+    async def test_cancel_booking_calls_notify(self):
+        from datetime import timedelta
+
+        cal = FakeCalendarAdapter()
+        event = await cal.create_event(VALID_SLOT, VALID_SLOT + timedelta(hours=1), "Стрижка")
+        appt = _make_appointment(google_event_id=event.event_id)
+
+        notif = _make_notification_mock()
+        service, _, _ = _make_service(calendar=cal, active_appointment=appt, notification=notif)
+
+        await service.cancel_booking(CLIENT_ID, actor_id=ACTOR_ID, now=FIXED_NOW)
+
+        notif.notify_booking_cancelled.assert_awaited_once()
+        call_kwargs = notif.notify_booking_cancelled.call_args.kwargs
+        assert call_kwargs["start_at"] == VALID_SLOT
+        assert call_kwargs["actor_id"] == ACTOR_ID
+
+    @pytest.mark.asyncio
+    async def test_no_notification_when_service_is_none(self):
+        """AppointmentService works fine without a notification service."""
+        service, _, _ = _make_service(notification=None)
+
+        # Must not raise
+        result = await service.create_booking(CLIENT_ID, VALID_SLOT, ACTOR_ID, now=FIXED_NOW)
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_notification_failure_does_not_abort_booking(self):
+        """A broken notification service must not propagate exceptions."""
+        notif = _make_notification_mock()
+        notif.notify_booking_created.side_effect = RuntimeError("telegram down")
+
+        service, repo, _ = _make_service(notification=notif)
+
+        # Must not raise even though notification fails
+        result = await service.create_booking(CLIENT_ID, VALID_SLOT, ACTOR_ID, now=FIXED_NOW)
+
+        # Booking was still persisted
+        repo.create.assert_awaited_once()
+        assert result is not None
