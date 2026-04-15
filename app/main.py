@@ -10,19 +10,26 @@ from app.core.config import settings
 from app.core.correlation import set_correlation_id
 from app.core.logging import configure_logging
 from app.integrations.telegram.client import bot_client
+from app.use_cases.deps import get_mcp_client, initialize_calendar_adapter
 
 configure_logging(debug=settings.debug)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    initialize_calendar_adapter()
+    mcp_client = get_mcp_client()
     await bot_client.initialize()
+    if mcp_client is not None:
+        await mcp_client.start()
     if settings.telegram_webhook_url:
         await bot_client.register_webhook(
             settings.telegram_webhook_url,
             settings.telegram_webhook_secret,
         )
     yield
+    if mcp_client is not None:
+        await mcp_client.stop()
     await bot_client.shutdown()
 
 

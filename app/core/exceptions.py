@@ -24,3 +24,7 @@ class CalendarSyncError(AppError):
 
 class TelegramDeliveryError(AppError):
     """A Telegram message could not be delivered."""
+
+
+class FlowExpiredError(AppError):
+    """The user's multi-step flow session has expired or is in an unexpected state."""

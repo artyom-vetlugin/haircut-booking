@@ -1,4 +1,7 @@
-"""Telegram update handlers — button-driven booking state machine.
+"""Telegram update handlers — thin dispatcher for the button-driven booking state machine.
+
+Each handler parses Telegram-specific input, delegates to the appropriate use case
+for flow orchestration, then formats the result into a Telegram message.
 
 Flow overview:
   Book:       handle_book → [book_date:…] → [book_slot:…] → [book_confirm]
@@ -6,8 +9,6 @@ Flow overview:
   Cancel:     handle_cancel_appointment → [cancel_confirm]
   Reschedule: handle_reschedule → [res_date:…] → [res_slot:…] → [res_confirm]
   Any step:   [flow_back] → IDLE + main-menu prompt
-
-State is persisted in BotSession; draft_payload carries cross-step data.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from app.core.config import settings
 from app.core.exceptions import (
     BookingConflictError,
     CalendarSyncError,
+    FlowExpiredError,
     NoAppointmentError,
     SlotUnavailableError,
     TooManyAppointmentsError,
@@ -40,14 +42,20 @@ from app.integrations.telegram.keyboards import (
     slots_keyboard,
 )
 from app.repositories.bot_session import BotSessionRepository
+from app.use_cases.booking_flow import BookingFlowUseCase
+from app.use_cases.cancel_flow import CancelFlowUseCase
 from app.use_cases.deps import HandlerServices, make_services
 from app.use_cases.handle_free_text_message import HandleFreeTextMessageUseCase
+from app.use_cases.reschedule_flow import RescheduleFlowUseCase
 from app.use_cases.start import StartUseCase
 
 logger = logging.getLogger(__name__)
 
 _start_use_case = StartUseCase()
 _free_text_use_case = HandleFreeTextMessageUseCase()
+_booking_flow = BookingFlowUseCase()
+_reschedule_flow = RescheduleFlowUseCase()
+_cancel_flow = CancelFlowUseCase()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -76,10 +84,13 @@ async def _upsert_client(svc: HandlerServices, tg_user: object) -> Client:
 
 
 async def _reset_user_state(user_id: int) -> None:
-    """Reset BotSession to IDLE in a fresh transaction."""
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            await BotSessionRepository(session).upsert(user_id, states.IDLE, {})
+    """Reset BotSession to IDLE in a fresh transaction. Failures are swallowed."""
+    try:
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                await BotSessionRepository(session).upsert(user_id, states.IDLE, {})
+    except Exception:
+        logger.exception("Failed to reset state for user %s after flow error", user_id)
 
 
 def _horizon_dt(tz: ZoneInfo) -> datetime:
@@ -299,35 +310,23 @@ async def _on_book_date(query: CallbackQuery, date_str: str) -> None:
         await query.edit_message_text(msg.ERROR_TRY_AGAIN)
         return
 
-    flow_expired = False
-    slots_list = None
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            svc = make_services(session)
-            bot_session = await svc.session_repo.get_by_telegram_user_id(user.id)
-            if bot_session is None or bot_session.current_state != states.BOOKING_SELECT_DATE:
-                flow_expired = True
-            else:
-                day_start = datetime(
-                    selected_date.year, selected_date.month, selected_date.day, tzinfo=tz
+    try:
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                svc = make_services(session)
+                slots_list = await _booking_flow.on_date_selected(
+                    user_id=user.id, selected_date=selected_date, svc=svc, now=now
                 )
-                day_end = day_start + timedelta(days=1)
-                busy = await svc.calendar.get_busy_intervals(day_start, day_end)
-                slots_list = svc.availability.get_available_slots(selected_date, busy, now)
-                await svc.session_repo.upsert(
-                    user.id, states.BOOKING_SELECT_SLOT, {"date": date_str}
-                )
-
-    if flow_expired:
+    except FlowExpiredError:
         await query.edit_message_text(msg.FLOW_EXPIRED)
         return
+
     if not slots_list:
         await query.edit_message_text(msg.NO_SLOTS_AVAILABLE)
         return
 
-    d = format_date_ru(selected_date)
     await query.edit_message_text(
-        msg.SELECT_SLOT.format(date=d),
+        msg.SELECT_SLOT.format(date=format_date_ru(selected_date)),
         reply_markup=slots_keyboard(slots_list, "book_slot"),
     )
 
@@ -342,27 +341,18 @@ async def _on_book_slot(query: CallbackQuery, slot_iso: str) -> None:
         await query.edit_message_text(msg.ERROR_TRY_AGAIN)
         return
 
-    flow_expired = False
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            svc = make_services(session)
-            bot_session = await svc.session_repo.get_by_telegram_user_id(user.id)
-            if bot_session is None or bot_session.current_state != states.BOOKING_SELECT_SLOT:
-                flow_expired = True
-            else:
-                await svc.session_repo.upsert(
-                    user.id, states.BOOKING_CONFIRM, {"slot_start": slot_iso}
-                )
-
-    if flow_expired:
+    try:
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                svc = make_services(session)
+                await _booking_flow.on_slot_selected(user_id=user.id, slot_iso=slot_iso, svc=svc)
+    except FlowExpiredError:
         await query.edit_message_text(msg.FLOW_EXPIRED)
         return
 
     local = slot_start.astimezone(tz)
-    d = format_date_ru(local.date())
-    t = format_time(local)
     await query.edit_message_text(
-        msg.CONFIRM_BOOKING.format(date=d, time=t),
+        msg.CONFIRM_BOOKING.format(date=format_date_ru(local.date()), time=format_time(local)),
         reply_markup=confirm_keyboard("book_confirm"),
     )
 
@@ -377,28 +367,20 @@ async def _on_book_confirm(query: CallbackQuery) -> None:
         async with AsyncSessionLocal() as session:
             async with session.begin():
                 svc = make_services(session)
-                bot_session = await svc.session_repo.get_by_telegram_user_id(user.id)
-
-                if bot_session is None or bot_session.current_state != states.BOOKING_CONFIRM:
-                    result_text = msg.FLOW_EXPIRED
-                else:
-                    slot_iso = (bot_session.draft_payload or {}).get("slot_start")
-                    if not slot_iso:
-                        result_text = msg.FLOW_EXPIRED
-                    else:
-                        slot_start = datetime.fromisoformat(slot_iso)
-                        client = await _upsert_client(svc, user)
-                        appt = await svc.appointment_service.create_booking(
-                            client.id,
-                            slot_start,
-                            actor_id=str(user.id),
-                            now=now,
-                        )
-                        await svc.session_repo.upsert(user.id, states.IDLE, {})
-                        local = appt.start_at.astimezone(tz)
-                        result_text = msg.BOOKING_SUCCESS.format(
-                            date=format_date_ru(local.date()), time=format_time(local)
-                        )
+                appt = await _booking_flow.on_confirm(
+                    user_id=user.id,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    username=user.username,
+                    svc=svc,
+                    now=now,
+                )
+        local = appt.start_at.astimezone(tz)
+        result_text = msg.BOOKING_SUCCESS.format(
+            date=format_date_ru(local.date()), time=format_time(local)
+        )
+    except FlowExpiredError:
+        result_text = msg.FLOW_EXPIRED
     except TooManyAppointmentsError:
         await _reset_user_state(user.id)
         result_text = msg.ALREADY_BOOKED
@@ -433,35 +415,23 @@ async def _on_res_date(query: CallbackQuery, date_str: str) -> None:
         await query.edit_message_text(msg.ERROR_TRY_AGAIN)
         return
 
-    flow_expired = False
-    slots_list = None
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            svc = make_services(session)
-            bot_session = await svc.session_repo.get_by_telegram_user_id(user.id)
-            if bot_session is None or bot_session.current_state != states.RESCHEDULE_SELECT_DATE:
-                flow_expired = True
-            else:
-                day_start = datetime(
-                    selected_date.year, selected_date.month, selected_date.day, tzinfo=tz
+    try:
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                svc = make_services(session)
+                slots_list = await _reschedule_flow.on_date_selected(
+                    user_id=user.id, selected_date=selected_date, svc=svc, now=now
                 )
-                day_end = day_start + timedelta(days=1)
-                busy = await svc.calendar.get_busy_intervals(day_start, day_end)
-                slots_list = svc.availability.get_available_slots(selected_date, busy, now)
-                await svc.session_repo.upsert(
-                    user.id, states.RESCHEDULE_SELECT_SLOT, {"date": date_str}
-                )
-
-    if flow_expired:
+    except FlowExpiredError:
         await query.edit_message_text(msg.FLOW_EXPIRED)
         return
+
     if not slots_list:
         await query.edit_message_text(msg.NO_SLOTS_AVAILABLE)
         return
 
-    d = format_date_ru(selected_date)
     await query.edit_message_text(
-        msg.SELECT_SLOT.format(date=d),
+        msg.SELECT_SLOT.format(date=format_date_ru(selected_date)),
         reply_markup=slots_keyboard(slots_list, "res_slot"),
     )
 
@@ -476,27 +446,18 @@ async def _on_res_slot(query: CallbackQuery, slot_iso: str) -> None:
         await query.edit_message_text(msg.ERROR_TRY_AGAIN)
         return
 
-    flow_expired = False
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            svc = make_services(session)
-            bot_session = await svc.session_repo.get_by_telegram_user_id(user.id)
-            if bot_session is None or bot_session.current_state != states.RESCHEDULE_SELECT_SLOT:
-                flow_expired = True
-            else:
-                await svc.session_repo.upsert(
-                    user.id, states.RESCHEDULE_CONFIRM, {"slot_start": slot_iso}
-                )
-
-    if flow_expired:
+    try:
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                svc = make_services(session)
+                await _reschedule_flow.on_slot_selected(user_id=user.id, slot_iso=slot_iso, svc=svc)
+    except FlowExpiredError:
         await query.edit_message_text(msg.FLOW_EXPIRED)
         return
 
     local = slot_start.astimezone(tz)
-    d = format_date_ru(local.date())
-    t = format_time(local)
     await query.edit_message_text(
-        msg.CONFIRM_RESCHEDULE.format(date=d, time=t),
+        msg.CONFIRM_RESCHEDULE.format(date=format_date_ru(local.date()), time=format_time(local)),
         reply_markup=confirm_keyboard("res_confirm"),
     )
 
@@ -511,28 +472,20 @@ async def _on_res_confirm(query: CallbackQuery) -> None:
         async with AsyncSessionLocal() as session:
             async with session.begin():
                 svc = make_services(session)
-                bot_session = await svc.session_repo.get_by_telegram_user_id(user.id)
-
-                if bot_session is None or bot_session.current_state != states.RESCHEDULE_CONFIRM:
-                    result_text = msg.FLOW_EXPIRED
-                else:
-                    slot_iso = (bot_session.draft_payload or {}).get("slot_start")
-                    if not slot_iso:
-                        result_text = msg.FLOW_EXPIRED
-                    else:
-                        slot_start = datetime.fromisoformat(slot_iso)
-                        client = await _upsert_client(svc, user)
-                        appt = await svc.appointment_service.reschedule_booking(
-                            client.id,
-                            slot_start,
-                            actor_id=str(user.id),
-                            now=now,
-                        )
-                        await svc.session_repo.upsert(user.id, states.IDLE, {})
-                        local = appt.start_at.astimezone(tz)
-                        result_text = msg.RESCHEDULE_SUCCESS.format(
-                            date=format_date_ru(local.date()), time=format_time(local)
-                        )
+                appt = await _reschedule_flow.on_confirm(
+                    user_id=user.id,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    username=user.username,
+                    svc=svc,
+                    now=now,
+                )
+        local = appt.start_at.astimezone(tz)
+        result_text = msg.RESCHEDULE_SUCCESS.format(
+            date=format_date_ru(local.date()), time=format_time(local)
+        )
+    except FlowExpiredError:
+        result_text = msg.FLOW_EXPIRED
     except NoAppointmentError:
         await _reset_user_state(user.id)
         result_text = msg.NO_APPOINTMENT
@@ -566,19 +519,17 @@ async def _on_cancel_confirm(query: CallbackQuery) -> None:
         async with AsyncSessionLocal() as session:
             async with session.begin():
                 svc = make_services(session)
-                bot_session = await svc.session_repo.get_by_telegram_user_id(user.id)
-
-                if bot_session is None or bot_session.current_state != states.CANCEL_CONFIRM:
-                    result_text = msg.FLOW_EXPIRED
-                else:
-                    client = await _upsert_client(svc, user)
-                    await svc.appointment_service.cancel_booking(
-                        client.id,
-                        actor_id=str(user.id),
-                        now=now,
-                    )
-                    await svc.session_repo.upsert(user.id, states.IDLE, {})
-                    result_text = msg.CANCEL_SUCCESS
+                await _cancel_flow.on_confirm(
+                    user_id=user.id,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    username=user.username,
+                    svc=svc,
+                    now=now,
+                )
+        result_text = msg.CANCEL_SUCCESS
+    except FlowExpiredError:
+        result_text = msg.FLOW_EXPIRED
     except NoAppointmentError:
         await _reset_user_state(user.id)
         result_text = msg.NO_APPOINTMENT

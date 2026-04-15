@@ -104,10 +104,9 @@ class GoogleCalendarMCPClient:
 
         See https://github.com/nspady/google-calendar-mcp for full setup steps.
         """
-        server_env: dict[str, str] = {
-            # TODO: uncomment once credentials are configured
-            # "GOOGLE_OAUTH_CREDENTIALS": settings.google_oauth_credentials_path,
-        }
+        server_env: dict[str, str] = {}
+        if settings.google_oauth_credentials_path:
+            server_env["GOOGLE_OAUTH_CREDENTIALS"] = settings.google_oauth_credentials_path
         return cls(
             calendar_id=settings.google_calendar_id,
             server_command="npx",

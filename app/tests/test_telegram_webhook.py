@@ -92,6 +92,7 @@ async def test_startup_registers_webhook_when_url_configured() -> None:
     with (
         patch.object(bot_client, "register_webhook", register_mock),
         patch("app.main.settings") as mock_settings,
+        patch("app.main.initialize_calendar_adapter"),
     ):
         mock_settings.telegram_webhook_url = "https://example.ngrok-free.app"
         mock_settings.telegram_webhook_secret = "secret"
@@ -118,6 +119,7 @@ async def test_startup_skips_webhook_when_url_empty() -> None:
     with (
         patch.object(bot_client, "register_webhook", register_mock),
         patch("app.main.settings") as mock_settings,
+        patch("app.main.initialize_calendar_adapter"),
     ):
         mock_settings.telegram_webhook_url = ""
 
