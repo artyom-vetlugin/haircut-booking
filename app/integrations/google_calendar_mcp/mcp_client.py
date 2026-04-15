@@ -43,14 +43,12 @@ from app.integrations.google_calendar_mcp.calendar_models import (
 
 logger = logging.getLogger(__name__)
 
-# TODO: These tool names must exactly match the names registered by your MCP server.
-# If you switch to a different Google Calendar MCP server implementation, update
-# these constants to match its tool registration.
-_TOOL_LIST_EVENTS = "list_events"
-_TOOL_CREATE_EVENT = "create_event"
-_TOOL_UPDATE_EVENT = "update_event"
-_TOOL_DELETE_EVENT = "delete_event"
-_TOOL_FREEBUSY = "freebusy"
+# Tool names registered by @cocal/google-calendar-mcp.
+_TOOL_LIST_EVENTS = "list-events"
+_TOOL_CREATE_EVENT = "create-event"
+_TOOL_UPDATE_EVENT = "update-event"
+_TOOL_DELETE_EVENT = "delete-event"
+_TOOL_FREEBUSY = "get-freebusy"
 
 
 class CalendarMCPError(Exception):
@@ -89,32 +87,27 @@ class GoogleCalendarMCPClient:
     def from_settings(cls, settings: Settings) -> "GoogleCalendarMCPClient":
         """Construct the client from application settings.
 
-        TODO: Add the following fields to ``Settings`` and ``.env`` once you
-        have completed the Google OAuth2 consent flow and obtained credentials.
-        See https://developers.google.com/calendar/api/guides/auth for the setup
-        steps::
+        TODO: Before using the real adapter:
+        1. Create OAuth 2.0 "Desktop app" credentials in Google Cloud Console and
+           download the JSON file (gcp-oauth.keys.json).
+        2. Run the one-time auth flow to generate tokens::
 
-            google_client_id: str = ""
-            google_client_secret: str = ""
-            google_refresh_token: str = ""
+               GOOGLE_OAUTH_CREDENTIALS=/path/to/gcp-oauth.keys.json \\
+                   npx @cocal/google-calendar-mcp auth
 
-        Then uncomment the corresponding lines in ``server_env`` below.
+        3. Set GOOGLE_OAUTH_CREDENTIALS in .env to that absolute path.
+        4. Uncomment the env var line in ``server_env`` below.
+
+        See https://github.com/nspady/google-calendar-mcp for full setup steps.
         """
         server_env: dict[str, str] = {
-            # TODO: populate from settings once OAuth credentials are configured
-            # "GOOGLE_CLIENT_ID": settings.google_client_id,
-            # "GOOGLE_CLIENT_SECRET": settings.google_client_secret,
-            # "GOOGLE_REFRESH_TOKEN": settings.google_refresh_token,
+            # TODO: uncomment once credentials are configured
+            # "GOOGLE_OAUTH_CREDENTIALS": settings.google_oauth_credentials_path,
         }
         return cls(
             calendar_id=settings.google_calendar_id,
-            # TODO: update command/args to match your MCP server installation.
-            # For the npm-based server:
-            #   command="npx", args=["-y", "@anthropic-ai/mcp-server-google-calendar"]
-            # For a local Python script:
-            #   command="python", args=["-m", "your_mcp_server_module"]
             server_command="npx",
-            server_args=["-y", "@anthropic-ai/mcp-server-google-calendar"],
+            server_args=["-y", "@cocal/google-calendar-mcp"],
             server_env=server_env,
         )
 
@@ -198,11 +191,9 @@ class GoogleCalendarMCPClient:
                 "calendarId": self._calendar_id,
                 "timeMin": time_min.isoformat(),
                 "timeMax": time_max.isoformat(),
-                "singleEvents": True,
-                "orderBy": "startTime",
             },
         )
-        items: list[dict] = payload.get("items", []) if payload else []
+        items: list[dict] = payload.get("events", []) if payload else []
         return [MCPEvent.model_validate(item) for item in items]
 
     async def create_event(
@@ -224,7 +215,7 @@ class GoogleCalendarMCPClient:
                 "end": {"dateTime": end_at.isoformat(), "timeZone": timezone},
             },
         )
-        return MCPEvent.model_validate(payload)
+        return MCPEvent.model_validate(payload["event"])
 
     async def update_event(
         self,
@@ -253,7 +244,7 @@ class GoogleCalendarMCPClient:
                 **body,
             },
         )
-        return MCPEvent.model_validate(payload)
+        return MCPEvent.model_validate(payload["event"])
 
     async def delete_event(self, event_id: str) -> None:
         """Permanently delete a calendar event."""
@@ -274,9 +265,9 @@ class GoogleCalendarMCPClient:
         payload = await self._call_tool(
             _TOOL_FREEBUSY,
             {
+                "calendarId": self._calendar_id,
                 "timeMin": time_min.isoformat(),
                 "timeMax": time_max.isoformat(),
-                "items": [{"id": self._calendar_id}],
             },
         )
         return MCPFreeBusyResponse.model_validate(payload or {})

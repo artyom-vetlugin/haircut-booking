@@ -9,7 +9,7 @@ Use CalendarEvent and BusyInterval from calendar_adapter / availability instead.
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class MCPEventDateTime(BaseModel):
@@ -23,7 +23,14 @@ class MCPEventDateTime(BaseModel):
 
 
 class MCPEvent(BaseModel):
-    """A Google Calendar event as returned by the MCP server."""
+    """A Google Calendar event as returned by the MCP server.
+
+    The server returns StructuredGoogleEvent which adds ``calendarId`` and
+    ``accountId`` fields on top of the standard Google Calendar shape.
+    ``extra="ignore"`` lets those pass through without validation errors.
+    """
+
+    model_config = ConfigDict(extra="ignore")
 
     id: str
     summary: str

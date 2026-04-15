@@ -27,13 +27,12 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-sonnet-4-6"
 
     # Google Calendar — google_calendar_id is the dedicated appointments calendar.
-    # The OAuth2 credentials below are required by the MCP server process.
-    # Obtain them by completing the Google OAuth2 consent flow:
-    # https://developers.google.com/calendar/api/guides/auth
+    # google_oauth_credentials_path is the absolute path to the gcp-oauth.keys.json
+    # file downloaded from Google Cloud Console (Desktop app credentials).
+    # Run the one-time auth flow before starting the app:
+    #   GOOGLE_OAUTH_CREDENTIALS=/path/to/keys.json npx @cocal/google-calendar-mcp auth
     google_calendar_id: str = ""
-    google_client_id: str = ""
-    google_client_secret: str = ""
-    google_refresh_token: str = ""
+    google_oauth_credentials_path: str = ""
 
     # Booking rules — all configurable via environment
     booking_horizon_days: int = 30
