@@ -43,6 +43,10 @@ from app.tools.booking_tools import (
 )
 from app.tools.tool_executor import execute_tool
 from app.use_cases.deps import HandlerServices
+from app.use_cases.handle_free_text_message import (
+    HandleFreeTextMessageUseCase,
+    _IN_FLOW_REPLY,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -467,3 +471,105 @@ class TestRescheduleAppointment:
         new_slot = datetime(2026, 4, 22, 11, 0, tzinfo=TZ)
         result = await reschedule_appointment({"new_slot_start": new_slot.isoformat()}, ctx)
         assert "уже есть запись" in result
+
+
+# ---------------------------------------------------------------------------
+# HandleFreeTextMessageUseCase
+# ---------------------------------------------------------------------------
+
+
+def _make_bot_session(state: str) -> MagicMock:
+    s = MagicMock()
+    s.current_state = state
+    return s
+
+
+class TestHandleFreeTextMessageUseCase:
+    @pytest.mark.asyncio
+    async def test_delegates_to_agent_when_idle(self):
+        from app.core import states
+
+        mock_agent = MagicMock(spec=AgentService)
+        mock_agent.handle_message = AsyncMock(return_value="Ответ от Claude")
+
+        ctx = _make_tool_context()
+        services = _make_handler_services(ctx)
+        services.session_repo.get_by_telegram_user_id = AsyncMock(
+            return_value=_make_bot_session(states.IDLE)
+        )
+
+        uc = HandleFreeTextMessageUseCase(agent_service=mock_agent)
+        result = await uc.execute(TG_USER_ID, "запишите меня", services)
+
+        assert result == "Ответ от Claude"
+        mock_agent.handle_message.assert_awaited_once_with(TG_USER_ID, "запишите меня", services)
+
+    @pytest.mark.asyncio
+    async def test_returns_in_flow_reply_when_booking_in_progress(self):
+        from app.core import states
+
+        mock_agent = MagicMock(spec=AgentService)
+        mock_agent.handle_message = AsyncMock(return_value="should not be called")
+
+        ctx = _make_tool_context()
+        services = _make_handler_services(ctx)
+        services.session_repo.get_by_telegram_user_id = AsyncMock(
+            return_value=_make_bot_session(states.BOOKING_SELECT_DATE)
+        )
+
+        uc = HandleFreeTextMessageUseCase(agent_service=mock_agent)
+        result = await uc.execute(TG_USER_ID, "стоп", services)
+
+        assert result == _IN_FLOW_REPLY
+        mock_agent.handle_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_returns_in_flow_reply_when_cancel_confirm(self):
+        from app.core import states
+
+        mock_agent = MagicMock(spec=AgentService)
+        mock_agent.handle_message = AsyncMock()
+
+        ctx = _make_tool_context()
+        services = _make_handler_services(ctx)
+        services.session_repo.get_by_telegram_user_id = AsyncMock(
+            return_value=_make_bot_session(states.CANCEL_CONFIRM)
+        )
+
+        uc = HandleFreeTextMessageUseCase(agent_service=mock_agent)
+        result = await uc.execute(TG_USER_ID, "стоп", services)
+
+        assert result == _IN_FLOW_REPLY
+
+    @pytest.mark.asyncio
+    async def test_delegates_to_agent_when_no_session(self):
+        mock_agent = MagicMock(spec=AgentService)
+        mock_agent.handle_message = AsyncMock(return_value="Привет")
+
+        ctx = _make_tool_context()
+        services = _make_handler_services(ctx)
+        services.session_repo.get_by_telegram_user_id = AsyncMock(return_value=None)
+
+        uc = HandleFreeTextMessageUseCase(agent_service=mock_agent)
+        result = await uc.execute(TG_USER_ID, "привет", services)
+
+        assert result == "Привет"
+        mock_agent.handle_message.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_proceeds_to_agent_when_session_read_fails(self):
+        """DB error reading session must not block the agent call."""
+        mock_agent = MagicMock(spec=AgentService)
+        mock_agent.handle_message = AsyncMock(return_value="Ответ")
+
+        ctx = _make_tool_context()
+        services = _make_handler_services(ctx)
+        services.session_repo.get_by_telegram_user_id = AsyncMock(
+            side_effect=RuntimeError("db error")
+        )
+
+        uc = HandleFreeTextMessageUseCase(agent_service=mock_agent)
+        result = await uc.execute(TG_USER_ID, "что-то", services)
+
+        assert result == "Ответ"
+        mock_agent.handle_message.assert_awaited_once()

@@ -37,15 +37,15 @@ from app.integrations.telegram.keyboards import (
     main_menu_keyboard,
     slots_keyboard,
 )
-from app.integrations.anthropic.agent_service import AgentService
 from app.repositories.bot_session import BotSessionRepository
 from app.use_cases.deps import HandlerServices, make_services
+from app.use_cases.handle_free_text_message import HandleFreeTextMessageUseCase
 from app.use_cases.start import StartUseCase
 
 logger = logging.getLogger(__name__)
 
 _start_use_case = StartUseCase()
-_agent_service = AgentService()
+_free_text_use_case = HandleFreeTextMessageUseCase()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -250,7 +250,7 @@ async def handle_unknown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     async with AsyncSessionLocal() as session:
         async with session.begin():
             svc = make_services(session)
-            reply = await _agent_service.handle_message(user.id, text, svc)
+            reply = await _free_text_use_case.execute(user.id, text, svc)
 
     await update.message.reply_text(reply, reply_markup=main_menu_keyboard())
 
