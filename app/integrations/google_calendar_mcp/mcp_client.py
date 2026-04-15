@@ -26,6 +26,7 @@ the Telegram bot client::
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from contextlib import AsyncExitStack
@@ -42,6 +43,9 @@ from app.integrations.google_calendar_mcp.calendar_models import (
 )
 
 logger = logging.getLogger(__name__)
+
+_CALL_TOOL_MAX_ATTEMPTS = 3
+_CALL_TOOL_BASE_DELAY = 1.0  # seconds; doubled on each retry
 
 # Tool names registered by @cocal/google-calendar-mcp.
 _TOOL_LIST_EVENTS = "list-events"
@@ -157,23 +161,45 @@ class GoogleCalendarMCPClient:
     async def _call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         """Call an MCP tool and return the parsed JSON payload.
 
+        Retries up to _CALL_TOOL_MAX_ATTEMPTS times on transient transport errors.
+        CalendarMCPError (tool-level application errors) are never retried.
+
         Raises:
             CalendarMCPError: if the MCP server reports a tool-level error.
         """
         session = self._require_session()
-        logger.debug("MCP tool call: %s %s", name, arguments)
+        last_exc: Exception | None = None
+        delay = _CALL_TOOL_BASE_DELAY
 
-        result = await session.call_tool(name, arguments)
+        for attempt in range(1, _CALL_TOOL_MAX_ATTEMPTS + 1):
+            try:
+                logger.debug("MCP tool call: %s (attempt %d/%d)", name, attempt, _CALL_TOOL_MAX_ATTEMPTS)
+                result = await session.call_tool(name, arguments)
 
-        if result.isError:
-            details = result.content[0].text if result.content else "(no details)"  # type: ignore[union-attr]
-            raise CalendarMCPError(f"MCP tool {name!r} returned an error: {details}")
+                if result.isError:
+                    details = result.content[0].text if result.content else "(no details)"  # type: ignore[union-attr]
+                    raise CalendarMCPError(f"MCP tool {name!r} returned an error: {details}")
 
-        if not result.content:
-            return None
+                if not result.content:
+                    return None
 
-        raw: str = result.content[0].text  # type: ignore[union-attr]
-        return json.loads(raw)
+                raw: str = result.content[0].text  # type: ignore[union-attr]
+                return json.loads(raw)
+
+            except CalendarMCPError:
+                # Tool-level application error — retrying won't help.
+                raise
+            except Exception as exc:
+                last_exc = exc
+                if attempt < _CALL_TOOL_MAX_ATTEMPTS:
+                    logger.warning(
+                        "MCP tool call %s failed (attempt %d/%d), retrying in %.1fs: %s",
+                        name, attempt, _CALL_TOOL_MAX_ATTEMPTS, delay, exc,
+                    )
+                    await asyncio.sleep(delay)
+                    delay *= 2
+
+        raise last_exc  # type: ignore[misc]
 
     # ------------------------------------------------------------------
     # Calendar tool wrappers

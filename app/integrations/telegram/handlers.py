@@ -23,7 +23,9 @@ from app.core import states
 from app.core.config import settings
 from app.core.exceptions import (
     BookingConflictError,
+    CalendarSyncError,
     NoAppointmentError,
+    SlotUnavailableError,
     TooManyAppointmentsError,
 )
 from app.db.models import Appointment, Client
@@ -403,8 +405,16 @@ async def _on_book_confirm(query: CallbackQuery) -> None:
     except BookingConflictError:
         await _reset_user_state(user.id)
         result_text = msg.BOOKING_CONFLICT_MSG
+    except SlotUnavailableError:
+        await _reset_user_state(user.id)
+        result_text = msg.SLOT_NO_LONGER_AVAILABLE
+    except CalendarSyncError:
+        logger.exception("Calendar sync error during booking for user %s", user.id)
+        await _reset_user_state(user.id)
+        result_text = msg.CALENDAR_ERROR
     except Exception:
         logger.exception("Booking failed for user %s", user.id)
+        await _reset_user_state(user.id)
         result_text = msg.ERROR_TRY_AGAIN
 
     await query.edit_message_text(result_text)
@@ -529,8 +539,16 @@ async def _on_res_confirm(query: CallbackQuery) -> None:
     except BookingConflictError:
         await _reset_user_state(user.id)
         result_text = msg.BOOKING_CONFLICT_MSG
+    except SlotUnavailableError:
+        await _reset_user_state(user.id)
+        result_text = msg.SLOT_NO_LONGER_AVAILABLE
+    except CalendarSyncError:
+        logger.exception("Calendar sync error during reschedule for user %s", user.id)
+        await _reset_user_state(user.id)
+        result_text = msg.CALENDAR_ERROR
     except Exception:
         logger.exception("Reschedule failed for user %s", user.id)
+        await _reset_user_state(user.id)
         result_text = msg.ERROR_TRY_AGAIN
 
     await query.edit_message_text(result_text)
@@ -564,8 +582,13 @@ async def _on_cancel_confirm(query: CallbackQuery) -> None:
     except NoAppointmentError:
         await _reset_user_state(user.id)
         result_text = msg.NO_APPOINTMENT
+    except CalendarSyncError:
+        logger.exception("Calendar sync error during cancellation for user %s", user.id)
+        await _reset_user_state(user.id)
+        result_text = msg.CALENDAR_ERROR
     except Exception:
         logger.exception("Cancel failed for user %s", user.id)
+        await _reset_user_state(user.id)
         result_text = msg.ERROR_TRY_AGAIN
 
     await query.edit_message_text(result_text)

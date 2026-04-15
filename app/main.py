@@ -1,10 +1,13 @@
+import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Awaitable, Callable
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 
 from app.api import api_router
 from app.core.config import settings
+from app.core.correlation import set_correlation_id
 from app.core.logging import configure_logging
 from app.integrations.telegram.client import bot_client
 
@@ -32,6 +35,17 @@ def create_app() -> FastAPI:
         redoc_url=None,
         lifespan=lifespan,
     )
+
+    @app.middleware("http")
+    async def correlation_id_middleware(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        cid = request.headers.get("X-Correlation-Id") or str(uuid.uuid4())
+        set_correlation_id(cid)
+        response = await call_next(request)
+        response.headers["X-Correlation-Id"] = cid
+        return response
+
     app.include_router(api_router)
     return app
 

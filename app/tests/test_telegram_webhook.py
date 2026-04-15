@@ -6,6 +6,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
+import app.integrations.telegram.webhook as webhook_module
 
 
 @pytest.mark.asyncio
@@ -124,3 +125,52 @@ async def test_startup_skips_webhook_when_url_empty() -> None:
             pass
 
     register_mock.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Duplicate update protection
+# ---------------------------------------------------------------------------
+
+
+def _clear_dedup_state() -> None:
+    """Reset module-level dedup state between tests."""
+    webhook_module._seen_ids.clear()
+    webhook_module._seen_queue.clear()
+
+
+@pytest.mark.asyncio
+async def test_webhook_duplicate_update_is_skipped() -> None:
+    """A repeated update_id must be silently dropped (returns 200 without processing)."""
+    from app.integrations.telegram.client import bot_client
+
+    _clear_dedup_state()
+    with patch("app.integrations.telegram.webhook.settings") as mock_settings:
+        mock_settings.telegram_webhook_secret = ""
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            await client.post("/webhook/telegram", json={"update_id": 42})
+            # Second request with the same update_id
+            response = await client.post("/webhook/telegram", json={"update_id": 42})
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    # process_update must have been called exactly once, not twice
+    assert bot_client.process_update.await_count == 1  # type: ignore[attr-defined]
+    _clear_dedup_state()
+
+
+@pytest.mark.asyncio
+async def test_webhook_distinct_update_ids_are_both_processed() -> None:
+    """Two requests with different update_ids must both be forwarded."""
+    from app.integrations.telegram.client import bot_client
+
+    _clear_dedup_state()
+    with patch("app.integrations.telegram.webhook.settings") as mock_settings:
+        mock_settings.telegram_webhook_secret = ""
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            await client.post("/webhook/telegram", json={"update_id": 100})
+            await client.post("/webhook/telegram", json={"update_id": 101})
+
+    assert bot_client.process_update.await_count == 2  # type: ignore[attr-defined]
+    _clear_dedup_state()
