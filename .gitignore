@@ -1,6 +1,7 @@
 # Environment / secrets
 .env
 .env.local
+gcp-oauth.keys.json
 
 # Python
 __pycache__/
