@@ -18,6 +18,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, Update
+from telegram.error import BadRequest as TelegramBadRequest
 from telegram.ext import ContextTypes
 
 from app.core import states
@@ -707,7 +708,10 @@ async def _on_book_confirm(query: CallbackQuery) -> None:
         result_text = msg.SLOT_NO_LONGER_AVAILABLE
     except CalendarSyncError:
         logger.exception("Calendar sync error during booking for user %s", user.id)
-        await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("book_confirm"))
+        try:
+            await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("book_confirm"))
+        except TelegramBadRequest:
+            pass  # message already shows the same error — no-op
         return
     except Exception:
         logger.exception("Booking failed for user %s", user.id)
@@ -815,7 +819,10 @@ async def _on_res_confirm(query: CallbackQuery) -> None:
         result_text = msg.SLOT_NO_LONGER_AVAILABLE
     except CalendarSyncError:
         logger.exception("Calendar sync error during reschedule for user %s", user.id)
-        await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("res_confirm"))
+        try:
+            await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("res_confirm"))
+        except TelegramBadRequest:
+            pass
         return
     except Exception:
         logger.exception("Reschedule failed for user %s", user.id)
@@ -853,7 +860,10 @@ async def _on_cancel_confirm(query: CallbackQuery) -> None:
         result_text = msg.NO_APPOINTMENT
     except CalendarSyncError:
         logger.exception("Calendar sync error during cancellation for user %s", user.id)
-        await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("cancel_confirm"))
+        try:
+            await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("cancel_confirm"))
+        except TelegramBadRequest:
+            pass
         return
     except Exception:
         logger.exception("Cancel failed for user %s", user.id)
@@ -975,7 +985,10 @@ async def _on_master_book_confirm(query: CallbackQuery) -> None:
         result_text = msg.SLOT_NO_LONGER_AVAILABLE
     except CalendarSyncError:
         logger.exception("Calendar sync error during master booking for user %s", user.id)
-        await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("master_book_confirm"))
+        try:
+            await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("master_book_confirm"))
+        except TelegramBadRequest:
+            pass
         return
     except Exception:
         logger.exception("Master booking confirm failed for user %s", user.id)
@@ -1107,7 +1120,10 @@ async def _on_master_res_confirm(query: CallbackQuery) -> None:
         result_text = msg.SLOT_NO_LONGER_AVAILABLE
     except CalendarSyncError:
         logger.exception("Calendar sync error during master reschedule for user %s", user.id)
-        await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("master_res_confirm"))
+        try:
+            await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("master_res_confirm"))
+        except TelegramBadRequest:
+            pass
         return
     except Exception:
         logger.exception("Master reschedule confirm failed for user %s", user.id)
@@ -1172,7 +1188,10 @@ async def _on_master_cancel_confirm(query: CallbackQuery) -> None:
         result_text = msg.ERROR_TRY_AGAIN
     except CalendarSyncError:
         logger.exception("Calendar sync error during master cancel for user %s", user.id)
-        await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("master_cancel_confirm"))
+        try:
+            await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("master_cancel_confirm"))
+        except TelegramBadRequest:
+            pass
         return
     except Exception:
         logger.exception("Master cancel confirm failed for user %s", user.id)
