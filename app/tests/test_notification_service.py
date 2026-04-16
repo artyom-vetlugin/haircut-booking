@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.services.notification_service import NotificationService, _client_ref, _fmt_dt
+from app.services.notification_service import NotificationService, _client_line, _fmt_dt
 
 TZ = ZoneInfo("Asia/Almaty")
 SLOT = datetime(2026, 4, 21, 10, 0, tzinfo=TZ)
@@ -42,14 +42,25 @@ class TestFmtDt:
         assert "09:30" in result
 
 
-class TestClientRef:
+class TestClientLine:
     def test_numeric_id_produces_html_link(self):
-        ref = _client_ref("12345678")
-        assert "tg://user?id=12345678" in ref
-        assert "<a href=" in ref
+        line = _client_line("12345678", "Иван", None)
+        assert "tg://user?id=12345678" in line
+        assert "Иван" in line
 
-    def test_non_numeric_id_returned_as_is(self):
-        assert _client_ref("system") == "system"
+    def test_shows_name_and_phone(self):
+        line = _client_line("12345678", "Мария", "+7 999 123 45 67")
+        assert "Мария" in line
+        assert "+7 999 123 45 67" in line
+
+    def test_fallback_name_when_none(self):
+        line = _client_line("12345678", None, None)
+        assert "Клиент" in line
+
+    def test_non_numeric_actor_id(self):
+        line = _client_line("master:99", "Иван", None)
+        assert "<a href=" not in line
+        assert "Иван" in line
 
 
 # ---------------------------------------------------------------------------
@@ -70,6 +81,17 @@ class TestNotifyBookingCreated:
         assert "апреля" in kwargs["text"]
         assert "10:00" in kwargs["text"]
         assert kwargs["parse_mode"] == "HTML"
+
+    @pytest.mark.asyncio
+    async def test_includes_name_and_phone(self):
+        svc, send_message = _make_service()
+        await svc.notify_booking_created(
+            start_at=SLOT, actor_id="42",
+            client_name="Иван", client_phone="+7 999 000 00 00",
+        )
+        text = send_message.call_args.kwargs["text"]
+        assert "Иван" in text
+        assert "+7 999 000 00 00" in text
 
     @pytest.mark.asyncio
     async def test_swallows_send_failure(self):

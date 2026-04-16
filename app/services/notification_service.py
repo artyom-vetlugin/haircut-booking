@@ -25,11 +25,16 @@ def _fmt_dt(dt: datetime, tz: ZoneInfo) -> str:
     return f"{local.day} {month} в {local.strftime('%H:%M')}"
 
 
-def _client_ref(actor_id: str) -> str:
-    """Return an HTML Telegram link when actor_id is a numeric user ID."""
+def _client_line(actor_id: str, client_name: str | None, client_phone: str | None) -> str:
+    """Return a formatted client line with name, phone, and optional Telegram link."""
+    name = client_name or "Клиент"
     if actor_id.isdigit():
-        return f'<a href="tg://user?id={actor_id}">Клиент</a>'
-    return actor_id
+        label = f'<a href="tg://user?id={actor_id}">{name}</a>'
+    else:
+        label = name
+    if client_phone:
+        return f"{label}\nТел: {client_phone}"
+    return label
 
 
 class NotificationService:
@@ -49,10 +54,12 @@ class NotificationService:
         self,
         start_at: datetime,
         actor_id: str,
+        client_name: str | None = None,
+        client_phone: str | None = None,
     ) -> None:
         text = (
             "📋 <b>Новая запись</b>\n"
-            f"{_client_ref(actor_id)}\n"
+            f"{_client_line(actor_id, client_name, client_phone)}\n"
             f"Время: {_fmt_dt(start_at, self._tz)}"
         )
         await self._send(text)
@@ -62,10 +69,12 @@ class NotificationService:
         old_start_at: datetime,
         new_start_at: datetime,
         actor_id: str,
+        client_name: str | None = None,
+        client_phone: str | None = None,
     ) -> None:
         text = (
             "🔄 <b>Перенос записи</b>\n"
-            f"{_client_ref(actor_id)}\n"
+            f"{_client_line(actor_id, client_name, client_phone)}\n"
             f"Было: {_fmt_dt(old_start_at, self._tz)}\n"
             f"Стало: {_fmt_dt(new_start_at, self._tz)}"
         )
@@ -75,10 +84,12 @@ class NotificationService:
         self,
         start_at: datetime,
         actor_id: str,
+        client_name: str | None = None,
+        client_phone: str | None = None,
     ) -> None:
         text = (
             "❌ <b>Отмена записи</b>\n"
-            f"{_client_ref(actor_id)}\n"
+            f"{_client_line(actor_id, client_name, client_phone)}\n"
             f"Время: {_fmt_dt(start_at, self._tz)}"
         )
         await self._send(text)

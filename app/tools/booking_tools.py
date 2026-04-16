@@ -130,6 +130,8 @@ async def create_booking(inp: dict[str, Any], ctx: ToolContext) -> str:
             actor_id=str(ctx.telegram_user_id),
             client_label=build_client_label(client),
             event_description=build_event_description(client),
+            client_name=client.first_name,
+            client_phone=client.phone_number,
             now=now,
         )
         local = appt.start_at.astimezone(tz)
@@ -161,6 +163,8 @@ async def cancel_appointment(inp: dict[str, Any], ctx: ToolContext) -> str:
             client.id,
             reason=reason,
             actor_id=str(ctx.telegram_user_id),
+            client_name=client.first_name,
+            client_phone=client.phone_number,
             now=now,
         )
         return "Запись успешно отменена."
@@ -191,6 +195,8 @@ async def reschedule_appointment(inp: dict[str, Any], ctx: ToolContext) -> str:
             client.id,
             new_slot_start,
             actor_id=str(ctx.telegram_user_id),
+            client_name=client.first_name,
+            client_phone=client.phone_number,
             now=now,
         )
         local = appt.start_at.astimezone(tz)

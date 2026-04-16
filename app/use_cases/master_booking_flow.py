@@ -120,6 +120,7 @@ class MasterBookingFlowUseCase:
             slot_start,
             actor_id=f"master:{master_id}",
             client_label=client_name,
+            client_name=client_name,
             now=now,
         )
 

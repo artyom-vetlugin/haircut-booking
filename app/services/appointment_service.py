@@ -88,6 +88,8 @@ class AppointmentService:
         *,
         client_label: str | None = None,
         event_description: str | None = None,
+        client_name: str | None = None,
+        client_phone: str | None = None,
         now: datetime | None = None,
     ) -> Appointment:
         now = now or datetime.now(tz=self._rules.timezone)
@@ -153,6 +155,8 @@ class AppointmentService:
                 await self._notification.notify_booking_created(
                     start_at=slot_start,
                     actor_id=actor_id,
+                    client_name=client_name,
+                    client_phone=client_phone,
                 )
             except Exception:
                 logger.exception("Master notification failed for booking created %s", appointment.id)
@@ -165,6 +169,8 @@ class AppointmentService:
         new_slot_start: datetime,
         actor_id: str = "system",
         *,
+        client_name: str | None = None,
+        client_phone: str | None = None,
         now: datetime | None = None,
     ) -> Appointment:
         now = now or datetime.now(tz=self._rules.timezone)
@@ -232,6 +238,8 @@ class AppointmentService:
                     old_start_at=old_start,
                     new_start_at=new_slot_start,
                     actor_id=actor_id,
+                    client_name=client_name,
+                    client_phone=client_phone,
                 )
             except Exception:
                 logger.exception("Master notification failed for reschedule %s", appointment.id)
@@ -244,6 +252,8 @@ class AppointmentService:
         reason: str | None = None,
         actor_id: str = "system",
         *,
+        client_name: str | None = None,
+        client_phone: str | None = None,
         now: datetime | None = None,
     ) -> Appointment:
         now = now or datetime.now(tz=self._rules.timezone)
@@ -294,6 +304,8 @@ class AppointmentService:
                 await self._notification.notify_booking_cancelled(
                     start_at=appointment.start_at,
                     actor_id=actor_id,
+                    client_name=client_name,
+                    client_phone=client_phone,
                 )
             except Exception:
                 logger.exception("Master notification failed for cancellation %s", appointment.id)
@@ -322,7 +334,7 @@ class AppointmentService:
         now = now or datetime.now(tz=self._rules.timezone)
         new_slot_end = new_slot_start + self._rules.slot_duration
 
-        appointment = await self._appointments.get_by_id(appointment_id)
+        appointment = await self._appointments.get_by_id(appointment_id, load_client=True)
         if appointment is None or appointment.status == AppointmentStatus.cancelled:
             raise NoAppointmentError("Appointment not found or already cancelled.")
 
@@ -335,6 +347,7 @@ class AppointmentService:
             raise BookingConflictError("New slot overlaps with an existing appointment.")
 
         old_start = appointment.start_at
+        client = appointment.client
 
         try:
             await self._calendar.update_event(
@@ -369,6 +382,8 @@ class AppointmentService:
                     old_start_at=old_start,
                     new_start_at=new_slot_start,
                     actor_id=actor_id,
+                    client_name=client.first_name if client else None,
+                    client_phone=client.phone_number if client else None,
                 )
             except Exception:
                 logger.exception("Master notification failed for reschedule %s", appointment.id)
@@ -387,9 +402,11 @@ class AppointmentService:
         """Cancel a specific appointment (master-facing variant)."""
         now = now or datetime.now(tz=self._rules.timezone)
 
-        appointment = await self._appointments.get_by_id(appointment_id)
+        appointment = await self._appointments.get_by_id(appointment_id, load_client=True)
         if appointment is None or appointment.status == AppointmentStatus.cancelled:
             raise NoAppointmentError("Appointment not found or already cancelled.")
+
+        client = appointment.client
 
         try:
             await self._calendar.delete_event(appointment.google_event_id)
@@ -422,6 +439,8 @@ class AppointmentService:
                 await self._notification.notify_booking_cancelled(
                     start_at=appointment.start_at,
                     actor_id=actor_id,
+                    client_name=client.first_name if client else None,
+                    client_phone=client.phone_number if client else None,
                 )
             except Exception:
                 logger.exception("Master notification failed for cancellation %s", appointment.id)

@@ -87,7 +87,10 @@ class RescheduleFlowUseCase:
         slot_start = datetime.fromisoformat(slot_iso)
         client = await get_or_create_client(svc, user_id, first_name, last_name, username)
         appt = await svc.appointment_service.reschedule_booking(
-            client.id, slot_start, actor_id=str(user_id), now=now
+            client.id, slot_start, actor_id=str(user_id),
+            client_name=client.first_name,
+            client_phone=client.phone_number,
+            now=now,
         )
         await svc.session_repo.upsert(user_id, states.IDLE, {})
         return appt

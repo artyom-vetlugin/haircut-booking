@@ -90,6 +90,8 @@ class BookingFlowUseCase:
             client.id, slot_start, actor_id=str(user_id),
             client_label=build_client_label(client),
             event_description=build_event_description(client),
+            client_name=client.first_name,
+            client_phone=client.phone_number,
             now=now,
         )
         await svc.session_repo.upsert(user_id, states.IDLE, {})

@@ -33,6 +33,9 @@ class CancelFlowUseCase:
 
         client = await get_or_create_client(svc, user_id, first_name, last_name, username)
         await svc.appointment_service.cancel_booking(
-            client.id, actor_id=str(user_id), now=now
+            client.id, actor_id=str(user_id),
+            client_name=client.first_name,
+            client_phone=client.phone_number,
+            now=now,
         )
         await svc.session_repo.upsert(user_id, states.IDLE, {})
