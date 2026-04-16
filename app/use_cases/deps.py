@@ -75,6 +75,21 @@ class HandlerServices:
     calendar: CalendarAdapter
 
 
+def build_client_label(client: object) -> str:
+    """Return a human-readable label for a client to use in calendar event descriptions."""
+    parts: list[str] = []
+    name = " ".join(
+        p for p in [getattr(client, "first_name", None), getattr(client, "last_name", None)]
+        if isinstance(p, str) and p
+    )
+    if name:
+        parts.append(name)
+    username = getattr(client, "telegram_username", None)
+    if isinstance(username, str) and username:
+        parts.append(f"@{username}")
+    return ", ".join(parts) if parts else f"tg:{getattr(client, 'telegram_user_id', '?')}"
+
+
 async def get_or_create_client(
     svc: HandlerServices,
     telegram_user_id: int,

@@ -73,6 +73,7 @@ class AppointmentService:
         slot_start: datetime,
         actor_id: str = "system",
         *,
+        client_label: str | None = None,
         now: datetime | None = None,
     ) -> Appointment:
         now = now or datetime.now(tz=self._rules.timezone)
@@ -102,6 +103,7 @@ class AppointmentService:
                 start_at=slot_start,
                 end_at=slot_end,
                 title=_APPOINTMENT_TITLE,
+                description=client_label,
             )
         except CalendarSyncError:
             raise
