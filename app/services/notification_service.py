@@ -94,15 +94,41 @@ class NotificationService:
         )
         await self._send(text)
 
-    async def _send(self, text: str) -> None:
+    async def notify_client_booking_cancelled(
+        self,
+        client_telegram_id: int | None,
+        start_at: datetime,
+    ) -> None:
+        if client_telegram_id is None:
+            return
+        from app.integrations.telegram.messages import CLIENT_APPOINTMENT_CANCELLED_BY_MASTER
+        text = CLIENT_APPOINTMENT_CANCELLED_BY_MASTER.format(dt=_fmt_dt(start_at, self._tz))
+        await self._send_to(client_telegram_id, text)
+
+    async def notify_client_booking_rescheduled(
+        self,
+        client_telegram_id: int | None,
+        old_start_at: datetime,
+        new_start_at: datetime,
+    ) -> None:
+        if client_telegram_id is None:
+            return
+        from app.integrations.telegram.messages import CLIENT_APPOINTMENT_RESCHEDULED_BY_MASTER
+        text = CLIENT_APPOINTMENT_RESCHEDULED_BY_MASTER.format(
+            old_dt=_fmt_dt(old_start_at, self._tz),
+            new_dt=_fmt_dt(new_start_at, self._tz),
+        )
+        await self._send_to(client_telegram_id, text)
+
+    async def _send_to(self, chat_id: int, text: str) -> None:
         try:
             await self._bot.send_message(
-                chat_id=self._master_chat_id,
+                chat_id=chat_id,
                 text=text,
                 parse_mode="HTML",
             )
         except Exception:
-            logger.exception(
-                "Failed to send master notification to chat_id=%s",
-                self._master_chat_id,
-            )
+            logger.exception("Failed to send notification to chat_id=%s", chat_id)
+
+    async def _send(self, text: str) -> None:
+        await self._send_to(self._master_chat_id, text)

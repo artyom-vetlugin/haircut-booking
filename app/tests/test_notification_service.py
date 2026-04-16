@@ -153,3 +153,90 @@ class TestNotifyBookingCancelled:
         send_message.side_effect = RuntimeError("telegram down")
 
         await svc.notify_booking_cancelled(start_at=SLOT, actor_id="42")
+
+
+# ---------------------------------------------------------------------------
+# notify_client_booking_cancelled
+# ---------------------------------------------------------------------------
+
+
+CLIENT_CHAT_ID = 777888
+
+
+class TestNotifyClientBookingCancelled:
+    @pytest.mark.asyncio
+    async def test_sends_message_to_client(self):
+        svc, send_message = _make_service()
+        await svc.notify_client_booking_cancelled(
+            client_telegram_id=CLIENT_CHAT_ID, start_at=SLOT
+        )
+
+        send_message.assert_awaited_once()
+        kwargs = send_message.call_args.kwargs
+        assert kwargs["chat_id"] == CLIENT_CHAT_ID
+        assert "отменена мастером" in kwargs["text"]
+        assert "10:00" in kwargs["text"]
+
+    @pytest.mark.asyncio
+    async def test_noop_when_telegram_id_is_none(self):
+        svc, send_message = _make_service()
+        await svc.notify_client_booking_cancelled(
+            client_telegram_id=None, start_at=SLOT
+        )
+
+        send_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_swallows_send_failure(self):
+        svc, send_message = _make_service()
+        send_message.side_effect = RuntimeError("telegram down")
+
+        # Must not raise
+        await svc.notify_client_booking_cancelled(
+            client_telegram_id=CLIENT_CHAT_ID, start_at=SLOT
+        )
+
+
+# ---------------------------------------------------------------------------
+# notify_client_booking_rescheduled
+# ---------------------------------------------------------------------------
+
+
+class TestNotifyClientBookingRescheduled:
+    @pytest.mark.asyncio
+    async def test_sends_message_to_client(self):
+        svc, send_message = _make_service()
+        await svc.notify_client_booking_rescheduled(
+            client_telegram_id=CLIENT_CHAT_ID,
+            old_start_at=OLD_SLOT,
+            new_start_at=SLOT,
+        )
+
+        send_message.assert_awaited_once()
+        kwargs = send_message.call_args.kwargs
+        assert kwargs["chat_id"] == CLIENT_CHAT_ID
+        assert "перенёс" in kwargs["text"]
+        assert "14:00" in kwargs["text"]  # old slot
+        assert "10:00" in kwargs["text"]  # new slot
+
+    @pytest.mark.asyncio
+    async def test_noop_when_telegram_id_is_none(self):
+        svc, send_message = _make_service()
+        await svc.notify_client_booking_rescheduled(
+            client_telegram_id=None,
+            old_start_at=OLD_SLOT,
+            new_start_at=SLOT,
+        )
+
+        send_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_swallows_send_failure(self):
+        svc, send_message = _make_service()
+        send_message.side_effect = RuntimeError("telegram down")
+
+        await svc.notify_client_booking_rescheduled(
+            client_telegram_id=CLIENT_CHAT_ID,
+            old_start_at=OLD_SLOT,
+            new_start_at=SLOT,
+        )

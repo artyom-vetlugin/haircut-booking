@@ -20,7 +20,15 @@ class TelegramBotClient:
         return self._application
 
     async def initialize(self) -> None:
-        app = ApplicationBuilder().token(settings.telegram_bot_token).build()
+        app = (
+            ApplicationBuilder()
+            .token(settings.telegram_bot_token)
+            .connect_timeout(15.0)
+            .read_timeout(30.0)
+            .write_timeout(30.0)
+            .pool_timeout(15.0)
+            .build()
+        )
         self._register_handlers(app)
         await app.initialize()
         self._application = app
@@ -34,6 +42,7 @@ class TelegramBotClient:
 
     def _register_handlers(self, app: Application) -> None:  # type: ignore[type-arg]
         # Lazy import to avoid any module-level circular dependency risk.
+        from telegram.error import NetworkError, TimedOut
         from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
         from app.core.constants import (
@@ -101,6 +110,16 @@ class TelegramBotClient:
         app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_unknown)
         )
+
+        async def _error_handler(update: object, context: object) -> None:  # type: ignore[type-arg]
+            from telegram.ext import CallbackContext
+            ctx: CallbackContext = context  # type: ignore[assignment]
+            if isinstance(ctx.error, (TimedOut, NetworkError)):
+                logger.warning("Transient Telegram API error (update dropped): %s", ctx.error)
+            else:
+                logger.exception("Unhandled error in PTB handler", exc_info=ctx.error)
+
+        app.add_error_handler(_error_handler)
 
     async def register_webhook(self, base_url: str, secret: str = "") -> None:
         """Call Telegram's setWebhook so updates are pushed to this server."""

@@ -112,3 +112,16 @@ MASTER_CANCEL_SUCCESS = "✅ Запись «{name}» отменена."
 MASTER_FREE_SLOTS_FOR = "Свободные слоты на {date}:\n{slots}"
 
 MASTER_FREE_SLOTS_NONE = "На {date} нет свободных слотов."
+
+# ── Client notifications (sent by master actions) ─────────────────────────────
+
+CLIENT_APPOINTMENT_CANCELLED_BY_MASTER = (
+    "❌ Ваша запись {dt} была отменена мастером.\n"
+    "Если хотите записаться снова — нажмите «Записаться»."
+)
+
+CLIENT_APPOINTMENT_RESCHEDULED_BY_MASTER = (
+    "🔄 Мастер перенёс вашу запись.\n"
+    "Было: {old_dt}\n"
+    "Стало: {new_dt}"
+)

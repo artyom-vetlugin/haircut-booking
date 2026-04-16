@@ -388,6 +388,16 @@ class AppointmentService:
             except Exception:
                 logger.exception("Master notification failed for reschedule %s", appointment.id)
 
+        if self._notification is not None and client is not None:
+            try:
+                await self._notification.notify_client_booking_rescheduled(
+                    client_telegram_id=client.telegram_user_id,
+                    old_start_at=old_start,
+                    new_start_at=new_slot_start,
+                )
+            except Exception:
+                logger.exception("Client notification failed for reschedule %s", appointment.id)
+
         return appointment
 
     async def cancel_appointment_by_id(
@@ -444,6 +454,15 @@ class AppointmentService:
                 )
             except Exception:
                 logger.exception("Master notification failed for cancellation %s", appointment.id)
+
+        if self._notification is not None and client is not None:
+            try:
+                await self._notification.notify_client_booking_cancelled(
+                    client_telegram_id=client.telegram_user_id,
+                    start_at=appointment.start_at,
+                )
+            except Exception:
+                logger.exception("Client notification failed for cancellation %s", appointment.id)
 
         return appointment
 
