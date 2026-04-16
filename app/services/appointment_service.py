@@ -63,6 +63,14 @@ class AppointmentService:
         now = now or datetime.now(tz=self._rules.timezone)
         return await self._appointments.get_active_by_client_id(client_id, now)
 
+    async def get_active_appointments_in_range(
+        self,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> list[Appointment]:
+        """Return all non-cancelled appointments overlapping [start_at, end_at)."""
+        return await self._appointments.get_active_in_range(start_at, end_at)
+
     # ------------------------------------------------------------------
     # Write
     # ------------------------------------------------------------------

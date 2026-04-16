@@ -56,6 +56,19 @@ class AppointmentRepository:
         result = await self._session.execute(query)
         return list(result.scalars().all())
 
+    async def get_active_in_range(
+        self, start_at: datetime, end_at: datetime
+    ) -> list[Appointment]:
+        """Return all active (non-cancelled) appointments overlapping [start_at, end_at)."""
+        result = await self._session.execute(
+            select(Appointment).where(
+                Appointment.status != AppointmentStatus.cancelled,
+                Appointment.start_at < end_at,
+                Appointment.end_at > start_at,
+            )
+        )
+        return list(result.scalars().all())
+
     async def list_by_client_id(self, client_id: uuid.UUID) -> list[Appointment]:
         result = await self._session.execute(
             select(Appointment)

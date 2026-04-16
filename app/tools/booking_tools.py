@@ -23,6 +23,7 @@ from app.core.exceptions import (
 )
 from app.integrations.google_calendar_mcp.calendar_adapter import CalendarAdapter
 from app.repositories.client import ClientRepository
+from app.schemas.availability import BusyInterval
 from app.services.appointment_service import AppointmentService
 from app.services.availability_service import AvailabilityService
 from app.services.booking_rules_service import BookingRulesService
@@ -60,7 +61,10 @@ async def get_available_slots(inp: dict[str, Any], ctx: ToolContext) -> str:
 
         day_start = datetime(target.year, target.month, target.day, tzinfo=tz)
         day_end = day_start + timedelta(days=1)
-        busy = await ctx.calendar.get_busy_intervals(day_start, day_end)
+        cal_busy = await ctx.calendar.get_busy_intervals(day_start, day_end)
+        db_appts = await ctx.appointment_service.get_active_appointments_in_range(day_start, day_end)
+        db_busy = [BusyInterval(start=a.start_at, end=a.end_at) for a in db_appts]
+        busy = cal_busy + db_busy
         slots = ctx.availability.get_available_slots(target, busy, now)
 
         if not slots:
@@ -72,7 +76,12 @@ async def get_available_slots(inp: dict[str, Any], ctx: ToolContext) -> str:
     else:
         today = now.date()
         horizon = today + timedelta(days=_HORIZON_DAYS)
-        busy = await ctx.calendar.get_busy_intervals(now, datetime(horizon.year, horizon.month, horizon.day, 23, 59, 59, tzinfo=tz))
+        range_start = now
+        range_end = datetime(horizon.year, horizon.month, horizon.day, 23, 59, 59, tzinfo=tz)
+        cal_busy = await ctx.calendar.get_busy_intervals(range_start, range_end)
+        db_appts = await ctx.appointment_service.get_active_appointments_in_range(range_start, range_end)
+        db_busy = [BusyInterval(start=a.start_at, end=a.end_at) for a in db_appts]
+        busy = cal_busy + db_busy
         day_slots = ctx.availability.get_available_slots_for_range(today, horizon, busy, now)
 
         if not day_slots:

@@ -134,6 +134,7 @@ def _make_tool_context(
 
     appt_svc = MagicMock(spec=AppointmentService)
     appt_svc.get_future_appointment_for_client = AsyncMock(return_value=active_appt)
+    appt_svc.get_active_appointments_in_range = AsyncMock(return_value=[])
     appt_svc.create_booking = AsyncMock(return_value=_make_appointment())
     appt_svc.cancel_booking = AsyncMock(return_value=_make_appointment())
     appt_svc.reschedule_booking = AsyncMock(return_value=_make_appointment())
