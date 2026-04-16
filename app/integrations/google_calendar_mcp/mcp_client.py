@@ -290,7 +290,7 @@ class GoogleCalendarMCPClient:
         payload = await self._call_tool(
             _TOOL_FREEBUSY,
             {
-                "calendars": [self._calendar_id],
+                "calendars": [{"id": self._calendar_id}],
                 "timeMin": time_min.strftime("%Y-%m-%dT%H:%M:%S"),
                 "timeMax": time_max.strftime("%Y-%m-%dT%H:%M:%S"),
             },
