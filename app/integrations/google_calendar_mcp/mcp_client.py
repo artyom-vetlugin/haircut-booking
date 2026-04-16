@@ -290,9 +290,9 @@ class GoogleCalendarMCPClient:
         payload = await self._call_tool(
             _TOOL_FREEBUSY,
             {
-                "calendarId": self._calendar_id,
-                "timeMin": time_min.isoformat(),
-                "timeMax": time_max.isoformat(),
+                "calendars": [self._calendar_id],
+                "timeMin": time_min.strftime("%Y-%m-%dT%H:%M:%S"),
+                "timeMax": time_max.strftime("%Y-%m-%dT%H:%M:%S"),
             },
         )
         return MCPFreeBusyResponse.model_validate(payload or {})
