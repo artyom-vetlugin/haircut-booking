@@ -17,7 +17,7 @@ import logging
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import ContextTypes
 
 from app.core import states
@@ -135,8 +135,13 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text(msg.WELCOME, reply_markup=main_menu_keyboard())
 
 
-async def _show_booking_date_picker(update: Update, user_id: int) -> None:
-    """Fetch available dates and show the date-selection keyboard for booking."""
+async def _show_booking_date_picker(update: Update, user_id: int, remove_keyboard: bool = False) -> None:
+    """Fetch available dates and show the date-selection keyboard for booking.
+
+    When remove_keyboard is True, sends a ReplyKeyboardRemove first so that
+    any persistent reply keyboard (phone request) is dismissed before the
+    inline date picker appears.
+    """
     assert update.message is not None
     tz = _tz()
     now = datetime.now(tz=tz)
@@ -150,6 +155,7 @@ async def _show_booking_date_picker(update: Update, user_id: int) -> None:
             try:
                 calendar_busy = await svc.calendar.get_busy_intervals(now, _horizon_dt(tz))
             except CalendarSyncError:
+                # main_menu_keyboard() replaces any existing reply keyboard
                 await update.message.reply_text(msg.CALENDAR_ERROR, reply_markup=main_menu_keyboard())
                 return
             db_appts = await svc.appointment_service.get_active_appointments_in_range(now, _horizon_dt(tz))
@@ -158,8 +164,14 @@ async def _show_booking_date_picker(update: Update, user_id: int) -> None:
             await svc.session_repo.upsert(user_id, states.BOOKING_SELECT_DATE, {})
 
     if not day_slots:
+        # main_menu_keyboard() replaces any existing reply keyboard
         await update.message.reply_text(msg.NO_SLOTS_AVAILABLE, reply_markup=main_menu_keyboard())
         return
+
+    if remove_keyboard:
+        # ReplyKeyboardRemove replaces the phone-request keyboard; the date
+        # picker uses an inline keyboard and doesn't need a reply keyboard.
+        await update.message.reply_text("\u200b", reply_markup=ReplyKeyboardRemove())
 
     await update.message.reply_text(msg.SELECT_DATE, reply_markup=dates_keyboard(day_slots, "book_date"))
 
@@ -202,19 +214,24 @@ async def handle_share_phone(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user = update.effective_user
     contact = update.message.contact
 
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            svc = make_services(session)
-            bot_session = await svc.session_repo.get_by_telegram_user_id(user.id)
-            if bot_session is None or bot_session.current_state != states.BOOKING_REQUEST_PHONE:
-                # Ignore stale contact shares outside the booking flow
-                return
-            if contact is not None and contact.phone_number:
-                client = await svc.client_repo.get_by_telegram_user_id(user.id)
-                if client is not None:
-                    await svc.client_repo.update(client, phone_number=contact.phone_number)
+    try:
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                svc = make_services(session)
+                bot_session = await svc.session_repo.get_by_telegram_user_id(user.id)
+                if bot_session is None or bot_session.current_state != states.BOOKING_REQUEST_PHONE:
+                    # Stale contact share outside the booking flow — ignore silently
+                    return
+                if contact is not None and contact.phone_number:
+                    client = await svc.client_repo.get_by_telegram_user_id(user.id)
+                    if client is not None:
+                        await svc.client_repo.update(client, phone_number=contact.phone_number)
+    except Exception:
+        logger.exception("handle_share_phone: failed to save phone for user %s", user.id)
+        await update.message.reply_text(msg.ERROR_TRY_AGAIN, reply_markup=main_menu_keyboard())
+        return
 
-    await _show_booking_date_picker(update, user.id)
+    await _show_booking_date_picker(update, user.id, remove_keyboard=True)
 
 
 async def handle_skip_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -230,7 +247,7 @@ async def handle_skip_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             if bot_session is None or bot_session.current_state != states.BOOKING_REQUEST_PHONE:
                 return
 
-    await _show_booking_date_picker(update, user.id)
+    await _show_booking_date_picker(update, user.id, remove_keyboard=True)
 
 
 async def handle_my_appointment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

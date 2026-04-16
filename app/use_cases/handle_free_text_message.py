@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 # States where the user is mid-flow; free text should not trigger the agent.
 _IN_FLOW_STATES = {
+    states.BOOKING_REQUEST_PHONE,
     states.BOOKING_SELECT_DATE,
     states.BOOKING_SELECT_SLOT,
     states.BOOKING_CONFIRM,
