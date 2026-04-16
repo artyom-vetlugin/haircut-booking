@@ -239,11 +239,17 @@ class AppointmentService:
                 "Client has no active future appointment to cancel."
             )
 
-        # 2. Remove from calendar
+        # 2. Remove from calendar.
+        # If the event is already gone (e.g. deleted manually), treat as success —
+        # the cancellation goal (event absent) is already achieved.
         try:
             await self._calendar.delete_event(appointment.google_event_id)
         except CalendarSyncError:
-            raise
+            logger.warning(
+                "Calendar event %s could not be deleted during cancellation "
+                "(may have been removed manually); proceeding with local cancel.",
+                appointment.google_event_id,
+            )
         except Exception as exc:
             raise CalendarSyncError(
                 f"Failed to delete calendar event: {exc}"

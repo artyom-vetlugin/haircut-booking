@@ -499,6 +499,38 @@ class TestCancelBooking:
         repo.update.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_cancel_succeeds_when_calendar_event_already_deleted(self):
+        """If the calendar event was removed manually, cancel must still succeed locally."""
+
+        class EventAlreadyGoneAdapter(CalendarAdapter):
+            async def delete_event(self, event_id):
+                raise CalendarSyncError("Event not found")
+
+            async def list_events(self, start, end):
+                return []
+
+            async def create_event(self, start_at, end_at, title, description=None):
+                raise NotImplementedError
+
+            async def update_event(self, event_id, start_at, end_at, title=None, description=None):
+                raise NotImplementedError
+
+            async def get_busy_intervals(self, start, end):
+                return []
+
+        appt = _make_appointment()
+        service, repo, audit = _make_service(
+            calendar=EventAlreadyGoneAdapter(), active_appointment=appt
+        )
+
+        result = await service.cancel_booking(CLIENT_ID, now=FIXED_NOW)
+
+        assert result is appt
+        update_kwargs = repo.update.call_args.kwargs
+        assert update_kwargs["status"] == AppointmentStatus.cancelled
+        audit.create.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_cancelled_at_is_set_to_now(self):
         from datetime import timedelta
 

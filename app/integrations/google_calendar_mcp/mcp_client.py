@@ -30,7 +30,7 @@ import asyncio
 import json
 import logging
 from contextlib import AsyncExitStack
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
@@ -236,8 +236,8 @@ class GoogleCalendarMCPClient:
                 "calendarId": self._calendar_id,
                 "summary": title,
                 "description": description or "",
-                "start": start_at.strftime("%Y-%m-%dT%H:%M:%S"),
-                "end": end_at.strftime("%Y-%m-%dT%H:%M:%S"),
+                "start": start_at.isoformat(),
+                "end": end_at.isoformat(),
             },
         )
         return MCPEvent.model_validate(payload["event"])
@@ -253,8 +253,8 @@ class GoogleCalendarMCPClient:
     ) -> MCPEvent:
         """Update the time (and optionally title/description) of an existing event."""
         body: dict[str, Any] = {
-            "start": start_at.strftime("%Y-%m-%dT%H:%M:%S"),
-            "end": end_at.strftime("%Y-%m-%dT%H:%M:%S"),
+            "start": start_at.isoformat(),
+            "end": end_at.isoformat(),
         }
         if title is not None:
             body["summary"] = title
@@ -287,12 +287,18 @@ class GoogleCalendarMCPClient:
         time_max: datetime,
     ) -> MCPFreeBusyResponse:
         """Query the freebusy endpoint for the appointment calendar."""
+        def _to_utc_naive(dt: datetime) -> str:
+            """Convert to UTC and strip offset so the MCP tool accepts it."""
+            if dt.tzinfo is not None:
+                dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            return dt.isoformat()
+
         payload = await self._call_tool(
             _TOOL_FREEBUSY,
             {
                 "calendars": [{"id": self._calendar_id}],
-                "timeMin": time_min.strftime("%Y-%m-%dT%H:%M:%S"),
-                "timeMax": time_max.strftime("%Y-%m-%dT%H:%M:%S"),
+                "timeMin": _to_utc_naive(time_min),
+                "timeMax": _to_utc_naive(time_max),
             },
         )
         return MCPFreeBusyResponse.model_validate(payload or {})
