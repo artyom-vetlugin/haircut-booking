@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     google_calendar_id: str = ""
     google_oauth_credentials_path: str = ""
 
+    # Master contact info — shown to clients who ask how to reach the master
+    master_contact_phone: str = ""
+
     # Booking rules — all configurable via environment
     booking_horizon_days: int = 30
     min_notice_hours: int = 2
