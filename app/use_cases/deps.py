@@ -76,18 +76,29 @@ class HandlerServices:
 
 
 def build_client_label(client: object) -> str:
-    """Return a human-readable label for a client to use in calendar event descriptions."""
-    parts: list[str] = []
+    """Return the client's display name for use in calendar event titles."""
     name = " ".join(
         p for p in [getattr(client, "first_name", None), getattr(client, "last_name", None)]
         if isinstance(p, str) and p
     )
     if name:
-        parts.append(name)
+        return name
     username = getattr(client, "telegram_username", None)
     if isinstance(username, str) and username:
-        parts.append(f"@{username}")
-    return ", ".join(parts) if parts else f"tg:{getattr(client, 'telegram_user_id', '?')}"
+        return f"@{username}"
+    return f"tg:{getattr(client, 'telegram_user_id', '?')}"
+
+
+def build_event_description(client: object) -> str | None:
+    """Return a structured calendar event description with contact details."""
+    lines: list[str] = []
+    username = getattr(client, "telegram_username", None)
+    if isinstance(username, str) and username:
+        lines.append(f"Telegram: @{username}")
+    phone = getattr(client, "phone_number", None)
+    if isinstance(phone, str) and phone:
+        lines.append(f"Телефон: {phone}")
+    return "\n".join(lines) if lines else None
 
 
 async def get_or_create_client(

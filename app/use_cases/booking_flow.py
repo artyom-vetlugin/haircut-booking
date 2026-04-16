@@ -14,7 +14,7 @@ from app.core import states
 from app.core.exceptions import FlowExpiredError
 from app.db.models import Appointment
 from app.schemas.availability import TimeSlot
-from app.use_cases.deps import HandlerServices, build_client_label, get_or_create_client
+from app.use_cases.deps import HandlerServices, build_client_label, build_event_description, get_or_create_client
 
 
 class BookingFlowUseCase:
@@ -86,7 +86,9 @@ class BookingFlowUseCase:
         client = await get_or_create_client(svc, user_id, first_name, last_name, username)
         appt = await svc.appointment_service.create_booking(
             client.id, slot_start, actor_id=str(user_id),
-            client_label=build_client_label(client), now=now,
+            client_label=build_client_label(client),
+            event_description=build_event_description(client),
+            now=now,
         )
         await svc.session_repo.upsert(user_id, states.IDLE, {})
         return appt

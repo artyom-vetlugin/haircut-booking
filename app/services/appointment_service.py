@@ -87,6 +87,7 @@ class AppointmentService:
         actor_id: str = "system",
         *,
         client_label: str | None = None,
+        event_description: str | None = None,
         now: datetime | None = None,
     ) -> Appointment:
         now = now or datetime.now(tz=self._rules.timezone)
@@ -115,8 +116,8 @@ class AppointmentService:
             event = await self._calendar.create_event(
                 start_at=slot_start,
                 end_at=slot_end,
-                title=_APPOINTMENT_TITLE,
-                description=client_label,
+                title=f"{_APPOINTMENT_TITLE} — {client_label}" if client_label else _APPOINTMENT_TITLE,
+                description=event_description,
             )
         except CalendarSyncError:
             raise

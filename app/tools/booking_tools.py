@@ -27,7 +27,7 @@ from app.schemas.availability import BusyInterval
 from app.services.appointment_service import AppointmentService
 from app.services.availability_service import AvailabilityService
 from app.services.booking_rules_service import BookingRulesService
-from app.use_cases.deps import build_client_label
+from app.use_cases.deps import build_client_label, build_event_description
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +129,7 @@ async def create_booking(inp: dict[str, Any], ctx: ToolContext) -> str:
             slot_start,
             actor_id=str(ctx.telegram_user_id),
             client_label=build_client_label(client),
+            event_description=build_event_description(client),
             now=now,
         )
         local = appt.start_at.astimezone(tz)
