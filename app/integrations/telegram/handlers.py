@@ -405,11 +405,13 @@ async def handle_unknown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(msg.UNKNOWN_INPUT, reply_markup=menu)
         return
 
-    # Master: intercept client-name entry during booking flow
+    # Master: intercept client-name entry during booking flow, then show menu for anything else
     if _is_master(user.id):
         handled = await _handle_master_text_input(update, user.id, text.strip())
         if handled:
             return
+        await update.message.reply_text(msg.MASTER_MAIN_MENU_PROMPT, reply_markup=master_menu_keyboard())
+        return
 
     reply: str
     in_flow: bool
