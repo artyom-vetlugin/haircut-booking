@@ -291,7 +291,7 @@ class GoogleCalendarMCPClient:
             """Convert to UTC and strip offset so the MCP tool accepts it."""
             if dt.tzinfo is not None:
                 dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
-            return dt.isoformat()
+            return dt.strftime("%Y-%m-%dT%H:%M:%S")
 
         payload = await self._call_tool(
             _TOOL_FREEBUSY,
