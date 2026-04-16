@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     #   GOOGLE_OAUTH_CREDENTIALS=/path/to/keys.json npx @cocal/google-calendar-mcp auth
     google_calendar_id: str = ""
     google_oauth_credentials_path: str = ""
+    # MCP account name to use for write operations (create/update/delete).
+    # Run `npx @cocal/google-calendar-mcp list-accounts` to see available accounts.
+    google_calendar_account: str = "normal"
 
     # Master contact info — shown to clients who ask how to reach the master
     master_contact_phone: str = ""

@@ -73,8 +73,10 @@ class GoogleCalendarMCPClient:
         server_command: str,
         server_args: list[str],
         server_env: dict[str, str],
+        account: str = "normal",
     ) -> None:
         self._calendar_id = calendar_id
+        self._account = account
         self._server_params = StdioServerParameters(
             command=server_command,
             args=server_args,
@@ -112,6 +114,7 @@ class GoogleCalendarMCPClient:
             server_command="npx",
             server_args=["-y", "@cocal/google-calendar-mcp"],
             server_env=server_env,
+            account=settings.google_calendar_account,
         )
 
     # ------------------------------------------------------------------
@@ -234,6 +237,7 @@ class GoogleCalendarMCPClient:
             _TOOL_CREATE_EVENT,
             {
                 "calendarId": self._calendar_id,
+                "account": self._account,
                 "summary": title,
                 "description": description or "",
                 "start": start_at.isoformat(),
@@ -265,6 +269,7 @@ class GoogleCalendarMCPClient:
             _TOOL_UPDATE_EVENT,
             {
                 "calendarId": self._calendar_id,
+                "account": self._account,
                 "eventId": event_id,
                 **body,
             },
@@ -277,6 +282,7 @@ class GoogleCalendarMCPClient:
             _TOOL_DELETE_EVENT,
             {
                 "calendarId": self._calendar_id,
+                "account": self._account,
                 "eventId": event_id,
             },
         )
