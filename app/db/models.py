@@ -25,7 +25,7 @@ class Client(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    telegram_user_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
+    telegram_user_id: Mapped[Optional[int]] = mapped_column(BigInteger, unique=True, nullable=True)
     telegram_username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     first_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     last_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

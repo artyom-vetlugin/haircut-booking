@@ -40,12 +40,19 @@ class TelegramBotClient:
             BTN_BOOK,
             BTN_CANCEL,
             BTN_CONTACT_MASTER,
+            BTN_MASTER_ALL_APPOINTMENTS,
+            BTN_MASTER_BOOK_CLIENT,
+            BTN_MASTER_CANCEL,
+            BTN_MASTER_FREE_SLOTS,
+            BTN_MASTER_RESCHEDULE,
             BTN_MY_APPOINTMENT,
             BTN_RESCHEDULE,
         )
         from app.integrations.telegram import handlers
 
         app.add_handler(CommandHandler("start", handlers.handle_start))
+
+        # Client menu handlers
         app.add_handler(MessageHandler(filters.Text([BTN_BOOK]), handlers.handle_book))
         app.add_handler(
             MessageHandler(filters.Text([BTN_MY_APPOINTMENT]), handlers.handle_my_appointment)
@@ -54,13 +61,31 @@ class TelegramBotClient:
             MessageHandler(filters.Text([BTN_RESCHEDULE]), handlers.handle_reschedule)
         )
         app.add_handler(
-            MessageHandler(
-                filters.Text([BTN_CANCEL]), handlers.handle_cancel_appointment
-            )
+            MessageHandler(filters.Text([BTN_CANCEL]), handlers.handle_cancel_appointment)
         )
         app.add_handler(
             MessageHandler(filters.Text([BTN_CONTACT_MASTER]), handlers.handle_contact_master)
         )
+
+        # Master menu handlers
+        app.add_handler(
+            MessageHandler(filters.Text([BTN_MASTER_BOOK_CLIENT]), handlers.handle_master_book_client)
+        )
+        app.add_handler(
+            MessageHandler(
+                filters.Text([BTN_MASTER_ALL_APPOINTMENTS]), handlers.handle_master_all_appointments
+            )
+        )
+        app.add_handler(
+            MessageHandler(filters.Text([BTN_MASTER_RESCHEDULE]), handlers.handle_master_reschedule)
+        )
+        app.add_handler(
+            MessageHandler(filters.Text([BTN_MASTER_CANCEL]), handlers.handle_master_cancel)
+        )
+        app.add_handler(
+            MessageHandler(filters.Text([BTN_MASTER_FREE_SLOTS]), handlers.handle_master_free_slots)
+        )
+
         # Inline keyboard callbacks (booking state machine)
         app.add_handler(CallbackQueryHandler(handlers.handle_callback))
         # Catch-all for unrecognised text (must be registered last)

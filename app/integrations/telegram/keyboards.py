@@ -8,9 +8,15 @@ from app.core.constants import (
     BTN_BOOK,
     BTN_CANCEL,
     BTN_CONTACT_MASTER,
+    BTN_MASTER_ALL_APPOINTMENTS,
+    BTN_MASTER_BOOK_CLIENT,
+    BTN_MASTER_CANCEL,
+    BTN_MASTER_FREE_SLOTS,
+    BTN_MASTER_RESCHEDULE,
     BTN_MY_APPOINTMENT,
     BTN_RESCHEDULE,
 )
+from app.db.models import Appointment
 from app.schemas.availability import DaySlots, TimeSlot
 
 _RU_WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
@@ -39,6 +45,37 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
         [KeyboardButton(BTN_CANCEL), KeyboardButton(BTN_CONTACT_MASTER)],
     ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
+
+
+def master_menu_keyboard() -> ReplyKeyboardMarkup:
+    buttons = [
+        [KeyboardButton(BTN_MASTER_BOOK_CLIENT)],
+        [KeyboardButton(BTN_MASTER_ALL_APPOINTMENTS), KeyboardButton(BTN_MASTER_FREE_SLOTS)],
+        [KeyboardButton(BTN_MASTER_RESCHEDULE), KeyboardButton(BTN_MASTER_CANCEL)],
+    ]
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
+
+
+def appointments_keyboard(appts: list[Appointment], cb_prefix: str) -> InlineKeyboardMarkup:
+    """Inline keyboard listing appointments for master selection.
+
+    Each button callback: ``{cb_prefix}:{appointment.id}``
+    Client name is taken from the eagerly loaded ``appt.client`` relationship.
+    """
+    from zoneinfo import ZoneInfo
+    from app.core.config import settings
+
+    tz = ZoneInfo(settings.app_timezone)
+    rows: list[list[InlineKeyboardButton]] = []
+    for appt in appts:
+        client_name = appt.client.first_name or "Клиент"
+        if appt.client.last_name:
+            client_name = f"{client_name} {appt.client.last_name}"
+        local = appt.start_at.astimezone(tz)
+        label = f"{client_name} — {format_date_ru(local.date())} {format_time(local)}"
+        rows.append([InlineKeyboardButton(label, callback_data=f"{cb_prefix}:{appt.id}")])
+    rows.append([InlineKeyboardButton("❌ Отмена", callback_data="flow_back")])
+    return InlineKeyboardMarkup(rows)
 
 
 def dates_keyboard(day_slots: list[DaySlots], cb_prefix: str) -> InlineKeyboardMarkup:

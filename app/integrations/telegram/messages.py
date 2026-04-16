@@ -74,3 +74,32 @@ CALENDAR_ERROR = "Не удалось синхронизировать с кал
 FLOW_EXPIRED = "Сессия устарела. Пожалуйста, начните заново."
 
 ERROR_TRY_AGAIN = "Произошла ошибка. Попробуйте ещё раз."
+
+# ── Master mode ───────────────────────────────────────────────────────────────
+
+MASTER_WELCOME = (
+    "Привет, мастер! Управление записями:\n"
+    "Выберите действие из меню ниже:"
+)
+
+MASTER_MAIN_MENU_PROMPT = "Выберите действие:"
+
+MASTER_ENTER_CLIENT_NAME = "Введите имя клиента:"
+
+MASTER_NO_APPOINTMENTS = "Предстоящих записей нет."
+
+MASTER_BOOKING_SUCCESS_FOR = "✅ Клиент «{name}» записан {date} в {time}."
+
+MASTER_SELECT_APPOINTMENT = "Выберите запись:"
+
+MASTER_RESCHEDULE_PROMPT = "Запись «{name}» — {date} в {time}.\n\nВыберите новую дату:"
+
+MASTER_RESCHEDULE_SUCCESS = "✅ Запись «{name}» перенесена на {date} в {time}."
+
+MASTER_CONFIRM_CANCEL = "Отменить запись «{name}» на {date} в {time}?"
+
+MASTER_CANCEL_SUCCESS = "✅ Запись «{name}» отменена."
+
+MASTER_FREE_SLOTS_FOR = "Свободные слоты на {date}:\n{slots}"
+
+MASTER_FREE_SLOTS_NONE = "На {date} нет свободных слотов."

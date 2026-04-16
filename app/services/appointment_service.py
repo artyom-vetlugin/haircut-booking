@@ -63,6 +63,11 @@ class AppointmentService:
         now = now or datetime.now(tz=self._rules.timezone)
         return await self._appointments.get_active_by_client_id(client_id, now)
 
+    async def get_by_id(
+        self, appointment_id: UUID, *, load_client: bool = False
+    ) -> Appointment | None:
+        return await self._appointments.get_by_id(appointment_id, load_client=load_client)
+
     async def get_active_appointments_in_range(
         self,
         start_at: datetime,
@@ -283,6 +288,134 @@ class AppointmentService:
         )
 
         # 5. Notify master (never let notification failures abort the cancellation)
+        if self._notification is not None:
+            try:
+                await self._notification.notify_booking_cancelled(
+                    start_at=appointment.start_at,
+                    actor_id=actor_id,
+                )
+            except Exception:
+                logger.exception("Master notification failed for cancellation %s", appointment.id)
+
+        return appointment
+
+    async def get_all_future_appointments(
+        self,
+        *,
+        now: datetime | None = None,
+    ) -> list[Appointment]:
+        """Return all non-cancelled appointments starting after *now*."""
+        now = now or datetime.now(tz=self._rules.timezone)
+        return await self._appointments.get_all_future(now)
+
+    async def reschedule_appointment_by_id(
+        self,
+        appointment_id: UUID,
+        new_slot_start: datetime,
+        actor_type: str = "master",
+        actor_id: str = "master",
+        *,
+        now: datetime | None = None,
+    ) -> Appointment:
+        """Reschedule a specific appointment (master-facing variant)."""
+        now = now or datetime.now(tz=self._rules.timezone)
+        new_slot_end = new_slot_start + self._rules.slot_duration
+
+        appointment = await self._appointments.get_by_id(appointment_id)
+        if appointment is None or appointment.status == AppointmentStatus.cancelled:
+            raise NoAppointmentError("Appointment not found or already cancelled.")
+
+        self._validate_slot(new_slot_start, now)
+
+        overlapping = await self._appointments.get_overlapping(
+            new_slot_start, new_slot_end, exclude_id=appointment.id
+        )
+        if overlapping:
+            raise BookingConflictError("New slot overlaps with an existing appointment.")
+
+        old_start = appointment.start_at
+
+        try:
+            await self._calendar.update_event(
+                event_id=appointment.google_event_id,
+                start_at=new_slot_start,
+                end_at=new_slot_end,
+            )
+        except CalendarSyncError:
+            raise
+        except Exception as exc:
+            raise CalendarSyncError(f"Failed to update calendar event: {exc}") from exc
+
+        appointment = await self._appointments.update(
+            appointment, start_at=new_slot_start, end_at=new_slot_end
+        )
+
+        await self._audit.create(
+            appointment_id=appointment.id,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            action="rescheduled",
+            payload_json={
+                "old_start_at": old_start.isoformat(),
+                "new_start_at": new_slot_start.isoformat(),
+                "new_end_at": new_slot_end.isoformat(),
+            },
+        )
+
+        if self._notification is not None:
+            try:
+                await self._notification.notify_booking_rescheduled(
+                    old_start_at=old_start,
+                    new_start_at=new_slot_start,
+                    actor_id=actor_id,
+                )
+            except Exception:
+                logger.exception("Master notification failed for reschedule %s", appointment.id)
+
+        return appointment
+
+    async def cancel_appointment_by_id(
+        self,
+        appointment_id: UUID,
+        reason: str | None = None,
+        actor_type: str = "master",
+        actor_id: str = "master",
+        *,
+        now: datetime | None = None,
+    ) -> Appointment:
+        """Cancel a specific appointment (master-facing variant)."""
+        now = now or datetime.now(tz=self._rules.timezone)
+
+        appointment = await self._appointments.get_by_id(appointment_id)
+        if appointment is None or appointment.status == AppointmentStatus.cancelled:
+            raise NoAppointmentError("Appointment not found or already cancelled.")
+
+        try:
+            await self._calendar.delete_event(appointment.google_event_id)
+        except CalendarSyncError:
+            logger.warning(
+                "Calendar event %s could not be deleted during master cancellation; "
+                "proceeding with local cancel.",
+                appointment.google_event_id,
+            )
+        except Exception as exc:
+            raise CalendarSyncError(f"Failed to delete calendar event: {exc}") from exc
+
+        appointment = await self._appointments.update(
+            appointment,
+            status=AppointmentStatus.cancelled,
+            cancelled_at=now,
+            cancel_reason=reason,
+        )
+
+        await self._audit.create(
+            appointment_id=appointment.id,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            action="cancelled",
+            payload_json={"reason": reason},
+        )
+
         if self._notification is not None:
             try:
                 await self._notification.notify_booking_cancelled(
