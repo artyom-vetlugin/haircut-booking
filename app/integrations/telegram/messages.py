@@ -88,6 +88,8 @@ MASTER_ENTER_CLIENT_NAME = "Введите имя клиента:"
 
 MASTER_NO_APPOINTMENTS = "Предстоящих записей нет."
 
+MASTER_CONFIRM_BOOKING = "Записать клиента «{name}» {date} в {time}?"
+
 MASTER_BOOKING_SUCCESS_FOR = "✅ Клиент «{name}» записан {date} в {time}."
 
 MASTER_SELECT_APPOINTMENT = "Выберите запись:"

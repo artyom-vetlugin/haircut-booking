@@ -78,8 +78,8 @@ class MasterBookingFlowUseCase:
         master_id: int,
         slot_iso: str,
         svc: HandlerServices,
-    ) -> None:
-        """Save the chosen slot and advance to confirm state."""
+    ) -> str:
+        """Save the chosen slot, advance to confirm state, and return the client name."""
         bot_session = await svc.session_repo.get_by_telegram_user_id(master_id)
         if bot_session is None or bot_session.current_state != states.MASTER_BOOKING_SELECT_SLOT:
             raise FlowExpiredError()
@@ -87,6 +87,7 @@ class MasterBookingFlowUseCase:
         draft = dict(bot_session.draft_payload or {})
         draft["slot_start"] = slot_iso
         await svc.session_repo.upsert(master_id, states.MASTER_BOOKING_CONFIRM, draft)
+        return draft.get("client_name", "")
 
     async def on_confirm(
         self,

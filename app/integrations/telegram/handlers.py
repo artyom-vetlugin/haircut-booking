@@ -827,11 +827,12 @@ async def _on_master_book_slot(query: CallbackQuery, slot_iso: str) -> None:
         await query.edit_message_text(msg.ERROR_TRY_AGAIN)
         return
 
+    client_name: str = ""
     try:
         async with AsyncSessionLocal() as session:
             async with session.begin():
                 svc = make_services(session)
-                await _master_booking_flow.on_slot_selected(
+                client_name = await _master_booking_flow.on_slot_selected(
                     master_id=user.id, slot_iso=slot_iso, svc=svc
                 )
     except FlowExpiredError:
@@ -840,7 +841,9 @@ async def _on_master_book_slot(query: CallbackQuery, slot_iso: str) -> None:
 
     local = slot_start.astimezone(tz)
     await query.edit_message_text(
-        msg.CONFIRM_BOOKING.format(date=format_date_ru(local.date()), time=format_time(local)),
+        msg.MASTER_CONFIRM_BOOKING.format(
+            name=client_name, date=format_date_ru(local.date()), time=format_time(local)
+        ),
         reply_markup=confirm_keyboard("master_book_confirm"),
     )
 
