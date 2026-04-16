@@ -235,9 +235,9 @@ class GoogleCalendarMCPClient:
             {
                 "calendarId": self._calendar_id,
                 "summary": title,
-                "description": description,
-                "start": {"dateTime": start_at.isoformat(), "timeZone": timezone},
-                "end": {"dateTime": end_at.isoformat(), "timeZone": timezone},
+                "description": description or "",
+                "start": start_at.strftime("%Y-%m-%dT%H:%M:%S"),
+                "end": end_at.strftime("%Y-%m-%dT%H:%M:%S"),
             },
         )
         return MCPEvent.model_validate(payload["event"])
@@ -253,8 +253,8 @@ class GoogleCalendarMCPClient:
     ) -> MCPEvent:
         """Update the time (and optionally title/description) of an existing event."""
         body: dict[str, Any] = {
-            "start": {"dateTime": start_at.isoformat(), "timeZone": timezone},
-            "end": {"dateTime": end_at.isoformat(), "timeZone": timezone},
+            "start": start_at.strftime("%Y-%m-%dT%H:%M:%S"),
+            "end": end_at.strftime("%Y-%m-%dT%H:%M:%S"),
         }
         if title is not None:
             body["summary"] = title
