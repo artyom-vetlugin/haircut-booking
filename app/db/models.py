@@ -88,6 +88,7 @@ class BotSession(Base):
     telegram_user_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
     current_state: Mapped[str] = mapped_column(String(100), nullable=False)
     draft_payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    conversation_history: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )

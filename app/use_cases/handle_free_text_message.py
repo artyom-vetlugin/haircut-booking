@@ -59,4 +59,18 @@ class HandleFreeTextMessageUseCase:
                 telegram_user_id,
             )
 
-        return await self._agent.handle_message(telegram_user_id, user_text, services)
+        session = await services.session_repo.get_by_telegram_user_id(telegram_user_id)
+        history = (session.conversation_history if session is not None else None) or []
+
+        reply, new_history = await self._agent.handle_message(
+            telegram_user_id, user_text, services, history=history
+        )
+
+        try:
+            await services.session_repo.save_conversation_history(telegram_user_id, new_history)
+        except Exception:
+            logger.exception(
+                "Failed to save conversation history for user %s", telegram_user_id
+            )
+
+        return reply

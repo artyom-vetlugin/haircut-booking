@@ -25,6 +25,7 @@ from app.use_cases.deps import HandlerServices
 logger = logging.getLogger(__name__)
 
 _MAX_ITERATIONS = 5
+_MAX_HISTORY = 20  # max messages kept across turns (10 user+assistant pairs)
 _FALLBACK = (
     "Извините, не удалось обработать ваш запрос. "
     "Пожалуйста, воспользуйтесь меню или попробуйте ещё раз."
@@ -42,11 +43,14 @@ class AgentService:
         telegram_user_id: int,
         user_text: str,
         services: HandlerServices,
-    ) -> str:
-        """Process a free-text user message and return a Russian reply.
+        history: list[dict[str, Any]] | None = None,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """Process a free-text user message and return (reply, updated_history).
 
-        The DB session embedded in *services* must remain open for the
-        duration of this call, as tool implementations run DB queries.
+        *history* contains prior user/assistant turns (plain text only, no tool
+        call internals).  The updated history is returned so the caller can
+        persist it.  The DB session embedded in *services* must remain open for
+        the duration of this call, as tool implementations run DB queries.
         """
         ctx = ToolContext(
             telegram_user_id=telegram_user_id,
@@ -57,7 +61,8 @@ class AgentService:
             rules=services.rules,
         )
 
-        messages: list[dict[str, Any]] = [
+        prior_history: list[dict[str, Any]] = list(history or [])
+        messages: list[dict[str, Any]] = prior_history + [
             {"role": "user", "content": user_text},
         ]
 
@@ -74,7 +79,7 @@ class AgentService:
                     iteration,
                     telegram_user_id,
                 )
-                return _FALLBACK
+                return _FALLBACK, prior_history
 
             text_parts: list[str] = []
             tool_calls: list[Any] = []
@@ -85,7 +90,14 @@ class AgentService:
                     tool_calls.append(block)
 
             if response.stop_reason == "end_turn" or not tool_calls:
-                return " ".join(text_parts).strip() or _FALLBACK
+                reply = " ".join(text_parts).strip() or _FALLBACK
+                new_history = prior_history + [
+                    {"role": "user", "content": user_text},
+                    {"role": "assistant", "content": reply},
+                ]
+                if len(new_history) > _MAX_HISTORY:
+                    new_history = new_history[-_MAX_HISTORY:]
+                return reply, new_history
 
             # Execute tool calls, then continue the loop
             messages.append({"role": "assistant", "content": response.content})
@@ -109,4 +121,4 @@ class AgentService:
             _MAX_ITERATIONS,
             telegram_user_id,
         )
-        return _FALLBACK
+        return _FALLBACK, prior_history

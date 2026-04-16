@@ -44,6 +44,14 @@ class BotSessionRepository:
         await self._session.refresh(session)
         return session
 
+    async def save_conversation_history(
+        self, telegram_user_id: int, history: list[dict]
+    ) -> None:
+        existing = await self.get_by_telegram_user_id(telegram_user_id)
+        if existing is not None:
+            existing.conversation_history = history
+            await self._session.flush()
+
     async def delete_by_telegram_user_id(self, telegram_user_id: int) -> None:
         existing = await self.get_by_telegram_user_id(telegram_user_id)
         if existing is not None:
