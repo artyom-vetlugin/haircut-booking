@@ -95,6 +95,9 @@ def build_event_description(client: object) -> str | None:
     username = getattr(client, "telegram_username", None)
     if isinstance(username, str) and username:
         lines.append(f"Telegram: @{username}")
+    tg_id = getattr(client, "telegram_user_id", None)
+    if tg_id is not None:
+        lines.append(f"tg://user?id={tg_id}")
     phone = getattr(client, "phone_number", None)
     if isinstance(phone, str) and phone:
         lines.append(f"Телефон: {phone}")
