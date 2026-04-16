@@ -17,7 +17,7 @@ import logging
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from telegram import CallbackQuery, Update
+from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from app.core import states
@@ -33,6 +33,7 @@ from app.core.exceptions import (
 from app.db.models import Appointment, Client
 from app.db.session import AsyncSessionLocal
 from app.integrations.telegram import messages as msg
+
 from app.integrations.telegram.keyboards import (
     confirm_keyboard,
     dates_keyboard,
@@ -260,12 +261,19 @@ async def handle_unknown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     reply: str
+    in_flow: bool
     async with AsyncSessionLocal() as session:
         async with session.begin():
             svc = make_services(session)
-            reply = await _free_text_use_case.execute(user.id, text, svc)
+            reply, in_flow = await _free_text_use_case.execute(user.id, text, svc)
 
-    await update.message.reply_text(reply, reply_markup=main_menu_keyboard())
+    if in_flow:
+        back_keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("◀️ Назад", callback_data="flow_back")]]
+        )
+        await update.message.reply_text(reply, reply_markup=back_keyboard)
+    else:
+        await update.message.reply_text(reply, reply_markup=main_menu_keyboard())
 
 
 # ── Callback query dispatcher ─────────────────────────────────────────────────

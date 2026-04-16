@@ -481,6 +481,7 @@ class TestRescheduleAppointment:
 def _make_bot_session(state: str) -> MagicMock:
     s = MagicMock()
     s.current_state = state
+    s.conversation_history = []
     return s
 
 
@@ -490,7 +491,7 @@ class TestHandleFreeTextMessageUseCase:
         from app.core import states
 
         mock_agent = MagicMock(spec=AgentService)
-        mock_agent.handle_message = AsyncMock(return_value="Ответ от Claude")
+        mock_agent.handle_message = AsyncMock(return_value=("Ответ от Claude", []))
 
         ctx = _make_tool_context()
         services = _make_handler_services(ctx)
@@ -499,10 +500,11 @@ class TestHandleFreeTextMessageUseCase:
         )
 
         uc = HandleFreeTextMessageUseCase(agent_service=mock_agent)
-        result = await uc.execute(TG_USER_ID, "запишите меня", services)
+        reply, in_flow = await uc.execute(TG_USER_ID, "запишите меня", services)
 
-        assert result == "Ответ от Claude"
-        mock_agent.handle_message.assert_awaited_once_with(TG_USER_ID, "запишите меня", services)
+        assert reply == "Ответ от Claude"
+        assert in_flow is False
+        mock_agent.handle_message.assert_awaited_once_with(TG_USER_ID, "запишите меня", services, history=[])
 
     @pytest.mark.asyncio
     async def test_returns_in_flow_reply_when_booking_in_progress(self):
@@ -518,9 +520,10 @@ class TestHandleFreeTextMessageUseCase:
         )
 
         uc = HandleFreeTextMessageUseCase(agent_service=mock_agent)
-        result = await uc.execute(TG_USER_ID, "стоп", services)
+        reply, in_flow = await uc.execute(TG_USER_ID, "стоп", services)
 
-        assert result == _IN_FLOW_REPLY
+        assert reply == _IN_FLOW_REPLY
+        assert in_flow is True
         mock_agent.handle_message.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -537,39 +540,43 @@ class TestHandleFreeTextMessageUseCase:
         )
 
         uc = HandleFreeTextMessageUseCase(agent_service=mock_agent)
-        result = await uc.execute(TG_USER_ID, "стоп", services)
+        reply, in_flow = await uc.execute(TG_USER_ID, "стоп", services)
 
-        assert result == _IN_FLOW_REPLY
+        assert reply == _IN_FLOW_REPLY
+        assert in_flow is True
 
     @pytest.mark.asyncio
     async def test_delegates_to_agent_when_no_session(self):
         mock_agent = MagicMock(spec=AgentService)
-        mock_agent.handle_message = AsyncMock(return_value="Привет")
+        mock_agent.handle_message = AsyncMock(return_value=("Привет", []))
 
         ctx = _make_tool_context()
         services = _make_handler_services(ctx)
         services.session_repo.get_by_telegram_user_id = AsyncMock(return_value=None)
 
         uc = HandleFreeTextMessageUseCase(agent_service=mock_agent)
-        result = await uc.execute(TG_USER_ID, "привет", services)
+        reply, in_flow = await uc.execute(TG_USER_ID, "привет", services)
 
-        assert result == "Привет"
+        assert reply == "Привет"
+        assert in_flow is False
         mock_agent.handle_message.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_proceeds_to_agent_when_session_read_fails(self):
         """DB error reading session must not block the agent call."""
         mock_agent = MagicMock(spec=AgentService)
-        mock_agent.handle_message = AsyncMock(return_value="Ответ")
+        mock_agent.handle_message = AsyncMock(return_value=("Ответ", []))
 
         ctx = _make_tool_context()
         services = _make_handler_services(ctx)
+        # First call (state check) raises; second call (history fetch) returns None
         services.session_repo.get_by_telegram_user_id = AsyncMock(
-            side_effect=RuntimeError("db error")
+            side_effect=[RuntimeError("db error"), None]
         )
 
         uc = HandleFreeTextMessageUseCase(agent_service=mock_agent)
-        result = await uc.execute(TG_USER_ID, "что-то", services)
+        reply, in_flow = await uc.execute(TG_USER_ID, "что-то", services)
 
-        assert result == "Ответ"
+        assert reply == "Ответ"
+        assert in_flow is False
         mock_agent.handle_message.assert_awaited_once()
