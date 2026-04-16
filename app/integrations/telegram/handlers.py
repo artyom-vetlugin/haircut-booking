@@ -707,8 +707,8 @@ async def _on_book_confirm(query: CallbackQuery) -> None:
         result_text = msg.SLOT_NO_LONGER_AVAILABLE
     except CalendarSyncError:
         logger.exception("Calendar sync error during booking for user %s", user.id)
-        await _reset_user_state(user.id)
-        result_text = msg.CALENDAR_ERROR
+        await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("book_confirm"))
+        return
     except Exception:
         logger.exception("Booking failed for user %s", user.id)
         await _reset_user_state(user.id)
@@ -815,8 +815,8 @@ async def _on_res_confirm(query: CallbackQuery) -> None:
         result_text = msg.SLOT_NO_LONGER_AVAILABLE
     except CalendarSyncError:
         logger.exception("Calendar sync error during reschedule for user %s", user.id)
-        await _reset_user_state(user.id)
-        result_text = msg.CALENDAR_ERROR
+        await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("res_confirm"))
+        return
     except Exception:
         logger.exception("Reschedule failed for user %s", user.id)
         await _reset_user_state(user.id)
@@ -853,8 +853,8 @@ async def _on_cancel_confirm(query: CallbackQuery) -> None:
         result_text = msg.NO_APPOINTMENT
     except CalendarSyncError:
         logger.exception("Calendar sync error during cancellation for user %s", user.id)
-        await _reset_user_state(user.id)
-        result_text = msg.CALENDAR_ERROR
+        await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("cancel_confirm"))
+        return
     except Exception:
         logger.exception("Cancel failed for user %s", user.id)
         await _reset_user_state(user.id)
@@ -975,8 +975,8 @@ async def _on_master_book_confirm(query: CallbackQuery) -> None:
         result_text = msg.SLOT_NO_LONGER_AVAILABLE
     except CalendarSyncError:
         logger.exception("Calendar sync error during master booking for user %s", user.id)
-        await _reset_user_state(user.id)
-        result_text = msg.CALENDAR_ERROR
+        await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("master_book_confirm"))
+        return
     except Exception:
         logger.exception("Master booking confirm failed for user %s", user.id)
         await _reset_user_state(user.id)
@@ -1107,8 +1107,8 @@ async def _on_master_res_confirm(query: CallbackQuery) -> None:
         result_text = msg.SLOT_NO_LONGER_AVAILABLE
     except CalendarSyncError:
         logger.exception("Calendar sync error during master reschedule for user %s", user.id)
-        await _reset_user_state(user.id)
-        result_text = msg.CALENDAR_ERROR
+        await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("master_res_confirm"))
+        return
     except Exception:
         logger.exception("Master reschedule confirm failed for user %s", user.id)
         await _reset_user_state(user.id)
@@ -1172,8 +1172,8 @@ async def _on_master_cancel_confirm(query: CallbackQuery) -> None:
         result_text = msg.ERROR_TRY_AGAIN
     except CalendarSyncError:
         logger.exception("Calendar sync error during master cancel for user %s", user.id)
-        await _reset_user_state(user.id)
-        result_text = msg.CALENDAR_ERROR
+        await query.edit_message_text(msg.CALENDAR_ERROR, reply_markup=confirm_keyboard("master_cancel_confirm"))
+        return
     except Exception:
         logger.exception("Master cancel confirm failed for user %s", user.id)
         await _reset_user_state(user.id)
