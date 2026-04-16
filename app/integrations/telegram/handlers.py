@@ -424,7 +424,8 @@ async def handle_unknown(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
         await update.message.reply_text(reply, reply_markup=back_keyboard)
     else:
-        await update.message.reply_text(reply, reply_markup=main_menu_keyboard())
+        menu = master_menu_keyboard() if _is_master(user.id) else main_menu_keyboard()
+        await update.message.reply_text(reply, reply_markup=menu)
 
 
 async def _handle_master_text_input(update: Update, master_id: int, text: str) -> bool:

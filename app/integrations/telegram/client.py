@@ -51,6 +51,8 @@ class TelegramBotClient:
         from app.integrations.telegram import handlers
 
         app.add_handler(CommandHandler("start", handlers.handle_start))
+        # Also handle Russian "старт" typed as plain text (e.g. from share button)
+        app.add_handler(MessageHandler(filters.Text(["старт", "Старт"]), handlers.handle_start))
 
         # Client menu handlers
         app.add_handler(MessageHandler(filters.Text([BTN_BOOK]), handlers.handle_book))
