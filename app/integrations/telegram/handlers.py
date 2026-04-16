@@ -21,6 +21,7 @@ from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, 
 from telegram.ext import ContextTypes
 
 from app.core import states
+from app.schemas.availability import BusyInterval
 from app.core.config import settings
 from app.core.exceptions import (
     BookingConflictError,
@@ -159,8 +160,14 @@ async def handle_book(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 )
                 return
 
-            busy = await svc.calendar.get_busy_intervals(now, _horizon_dt(tz))
-            day_slots = svc.availability.get_available_slots_for_range(today, horizon, busy, now)
+            try:
+                calendar_busy = await svc.calendar.get_busy_intervals(now, _horizon_dt(tz))
+            except CalendarSyncError:
+                await update.message.reply_text(msg.CALENDAR_ERROR, reply_markup=main_menu_keyboard())
+                return
+            db_appts = await svc.appointment_service.get_active_appointments_in_range(now, _horizon_dt(tz))
+            db_busy = [BusyInterval(start=a.start_at, end=a.end_at) for a in db_appts]
+            day_slots = svc.availability.get_available_slots_for_range(today, horizon, calendar_busy + db_busy, now)
             await svc.session_repo.upsert(user.id, states.BOOKING_SELECT_DATE, {})
 
     if not day_slots:
@@ -247,8 +254,14 @@ async def handle_reschedule(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 await update.message.reply_text(msg.NO_APPOINTMENT, reply_markup=main_menu_keyboard())
                 return
             appt_date, appt_time = _format_appt(appt)
-            busy = await svc.calendar.get_busy_intervals(now, _horizon_dt(tz))
-            day_slots = svc.availability.get_available_slots_for_range(today, horizon, busy, now)
+            try:
+                calendar_busy = await svc.calendar.get_busy_intervals(now, _horizon_dt(tz))
+            except CalendarSyncError:
+                await update.message.reply_text(msg.CALENDAR_ERROR, reply_markup=main_menu_keyboard())
+                return
+            db_appts = await svc.appointment_service.get_active_appointments_in_range(now, _horizon_dt(tz))
+            db_busy = [BusyInterval(start=a.start_at, end=a.end_at) for a in db_appts]
+            day_slots = svc.availability.get_available_slots_for_range(today, horizon, calendar_busy + db_busy, now)
             await svc.session_repo.upsert(user.id, states.RESCHEDULE_SELECT_DATE, {})
 
     if not day_slots:
@@ -546,6 +559,9 @@ async def _on_book_date(query: CallbackQuery, date_str: str) -> None:
     except FlowExpiredError:
         await query.edit_message_text(msg.FLOW_EXPIRED)
         return
+    except CalendarSyncError:
+        await query.edit_message_text(msg.CALENDAR_ERROR)
+        return
 
     if not slots_list:
         await query.edit_message_text(msg.NO_SLOTS_AVAILABLE)
@@ -650,6 +666,9 @@ async def _on_res_date(query: CallbackQuery, date_str: str) -> None:
                 )
     except FlowExpiredError:
         await query.edit_message_text(msg.FLOW_EXPIRED)
+        return
+    except CalendarSyncError:
+        await query.edit_message_text(msg.CALENDAR_ERROR)
         return
 
     if not slots_list:

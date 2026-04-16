@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 from app.core import states
 from app.core.exceptions import FlowExpiredError
 from app.db.models import Appointment
-from app.schemas.availability import TimeSlot
+from app.schemas.availability import BusyInterval, TimeSlot
 from app.use_cases.deps import HandlerServices, get_or_create_client
 
 
@@ -37,8 +37,10 @@ class RescheduleFlowUseCase:
         tz = now.tzinfo
         day_start = datetime(selected_date.year, selected_date.month, selected_date.day, tzinfo=tz)
         day_end = day_start + timedelta(days=1)
-        busy = await svc.calendar.get_busy_intervals(day_start, day_end)
-        slots = svc.availability.get_available_slots(selected_date, busy, now)
+        calendar_busy = await svc.calendar.get_busy_intervals(day_start, day_end)
+        db_appts = await svc.appointment_service.get_active_appointments_in_range(day_start, day_end)
+        db_busy = [BusyInterval(start=a.start_at, end=a.end_at) for a in db_appts]
+        slots = svc.availability.get_available_slots(selected_date, calendar_busy + db_busy, now)
         await svc.session_repo.upsert(
             user_id, states.RESCHEDULE_SELECT_SLOT, {"date": selected_date.isoformat()}
         )
