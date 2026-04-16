@@ -93,11 +93,11 @@ def build_event_description(client: object) -> str | None:
     """Return a structured calendar event description with contact details."""
     lines: list[str] = []
     username = getattr(client, "telegram_username", None)
+    tg_id = getattr(client, "telegram_user_id", None)
     if isinstance(username, str) and username:
         lines.append(f"Telegram: @{username}")
-    tg_id = getattr(client, "telegram_user_id", None)
     if tg_id is not None:
-        lines.append(f"tg://user?id={tg_id}")
+        lines.append(f"Написать: tg://user?id={tg_id}")
     phone = getattr(client, "phone_number", None)
     if isinstance(phone, str) and phone:
         lines.append(f"Телефон: {phone}")
