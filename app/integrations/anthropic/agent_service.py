@@ -16,7 +16,7 @@ import logging
 from typing import Any
 
 from app.integrations.anthropic.claude_client import ClaudeClient
-from app.integrations.anthropic.prompts import SYSTEM_PROMPT
+from app.integrations.anthropic.prompts import build_system_prompt
 from app.integrations.anthropic.tool_definitions import ALL_TOOLS
 from app.tools.booking_tools import ToolContext
 from app.tools.tool_executor import execute_tool
@@ -71,7 +71,7 @@ class AgentService:
                 response = await self._client.complete(
                     messages=messages,
                     tools=ALL_TOOLS,
-                    system=SYSTEM_PROMPT,
+                    system=build_system_prompt(),
                 )
             except Exception:
                 logger.exception(
