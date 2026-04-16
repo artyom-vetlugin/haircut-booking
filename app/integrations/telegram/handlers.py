@@ -43,6 +43,7 @@ from app.integrations.telegram.keyboards import (
     format_time,
     main_menu_keyboard,
     master_menu_keyboard,
+    phone_request_keyboard,
     slots_keyboard,
 )
 from app.repositories.bot_session import BotSessionRepository
@@ -134,16 +135,42 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text(msg.WELCOME, reply_markup=main_menu_keyboard())
 
 
-async def handle_book(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.message is None or update.effective_user is None:
-        return
-    user = update.effective_user
+async def _show_booking_date_picker(update: Update, user_id: int) -> None:
+    """Fetch available dates and show the date-selection keyboard for booking."""
+    assert update.message is not None
     tz = _tz()
     now = datetime.now(tz=tz)
     today = now.date()
     horizon = today + timedelta(days=settings.booking_horizon_days)
 
     day_slots = None
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            svc = make_services(session)
+            try:
+                calendar_busy = await svc.calendar.get_busy_intervals(now, _horizon_dt(tz))
+            except CalendarSyncError:
+                await update.message.reply_text(msg.CALENDAR_ERROR, reply_markup=main_menu_keyboard())
+                return
+            db_appts = await svc.appointment_service.get_active_appointments_in_range(now, _horizon_dt(tz))
+            db_busy = [BusyInterval(start=a.start_at, end=a.end_at) for a in db_appts]
+            day_slots = svc.availability.get_available_slots_for_range(today, horizon, calendar_busy + db_busy, now)
+            await svc.session_repo.upsert(user_id, states.BOOKING_SELECT_DATE, {})
+
+    if not day_slots:
+        await update.message.reply_text(msg.NO_SLOTS_AVAILABLE, reply_markup=main_menu_keyboard())
+        return
+
+    await update.message.reply_text(msg.SELECT_DATE, reply_markup=dates_keyboard(day_slots, "book_date"))
+
+
+async def handle_book(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message is None or update.effective_user is None:
+        return
+    user = update.effective_user
+    tz = _tz()
+    now = datetime.now(tz=tz)
+
     async with AsyncSessionLocal() as session:
         async with session.begin():
             svc = make_services(session)
@@ -160,21 +187,50 @@ async def handle_book(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 )
                 return
 
-            try:
-                calendar_busy = await svc.calendar.get_busy_intervals(now, _horizon_dt(tz))
-            except CalendarSyncError:
-                await update.message.reply_text(msg.CALENDAR_ERROR, reply_markup=main_menu_keyboard())
+            if not client.phone_number:
+                await svc.session_repo.upsert(user.id, states.BOOKING_REQUEST_PHONE, {})
+                await update.message.reply_text(msg.REQUEST_PHONE, reply_markup=phone_request_keyboard())
                 return
-            db_appts = await svc.appointment_service.get_active_appointments_in_range(now, _horizon_dt(tz))
-            db_busy = [BusyInterval(start=a.start_at, end=a.end_at) for a in db_appts]
-            day_slots = svc.availability.get_available_slots_for_range(today, horizon, calendar_busy + db_busy, now)
-            await svc.session_repo.upsert(user.id, states.BOOKING_SELECT_DATE, {})
 
-    if not day_slots:
-        await update.message.reply_text(msg.NO_SLOTS_AVAILABLE, reply_markup=main_menu_keyboard())
+    await _show_booking_date_picker(update, user.id)
+
+
+async def handle_share_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the Telegram contact share — save phone, proceed to date picker."""
+    if update.message is None or update.effective_user is None:
         return
+    user = update.effective_user
+    contact = update.message.contact
 
-    await update.message.reply_text(msg.SELECT_DATE, reply_markup=dates_keyboard(day_slots, "book_date"))
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            svc = make_services(session)
+            bot_session = await svc.session_repo.get_by_telegram_user_id(user.id)
+            if bot_session is None or bot_session.current_state != states.BOOKING_REQUEST_PHONE:
+                # Ignore stale contact shares outside the booking flow
+                return
+            if contact is not None and contact.phone_number:
+                client = await svc.client_repo.get_by_telegram_user_id(user.id)
+                if client is not None:
+                    await svc.client_repo.update(client, phone_number=contact.phone_number)
+
+    await _show_booking_date_picker(update, user.id)
+
+
+async def handle_skip_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle 'Пропустить' in the phone request step — proceed without saving a phone."""
+    if update.message is None or update.effective_user is None:
+        return
+    user = update.effective_user
+
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            svc = make_services(session)
+            bot_session = await svc.session_repo.get_by_telegram_user_id(user.id)
+            if bot_session is None or bot_session.current_state != states.BOOKING_REQUEST_PHONE:
+                return
+
+    await _show_booking_date_picker(update, user.id)
 
 
 async def handle_my_appointment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

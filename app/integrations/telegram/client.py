@@ -47,6 +47,7 @@ class TelegramBotClient:
             BTN_MASTER_RESCHEDULE,
             BTN_MY_APPOINTMENT,
             BTN_RESCHEDULE,
+            BTN_SKIP_PHONE,
         )
         from app.integrations.telegram import handlers
 
@@ -86,6 +87,12 @@ class TelegramBotClient:
         )
         app.add_handler(
             MessageHandler(filters.Text([BTN_MASTER_FREE_SLOTS]), handlers.handle_master_free_slots)
+        )
+
+        # Phone request step handlers (must be before catch-all)
+        app.add_handler(MessageHandler(filters.CONTACT, handlers.handle_share_phone))
+        app.add_handler(
+            MessageHandler(filters.Text([BTN_SKIP_PHONE]), handlers.handle_skip_phone)
         )
 
         # Inline keyboard callbacks (booking state machine)

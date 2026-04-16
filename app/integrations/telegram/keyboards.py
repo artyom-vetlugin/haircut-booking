@@ -15,6 +15,8 @@ from app.core.constants import (
     BTN_MASTER_RESCHEDULE,
     BTN_MY_APPOINTMENT,
     BTN_RESCHEDULE,
+    BTN_SHARE_PHONE,
+    BTN_SKIP_PHONE,
 )
 from app.db.models import Appointment
 from app.schemas.availability import DaySlots, TimeSlot
@@ -45,6 +47,14 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
         [KeyboardButton(BTN_CANCEL), KeyboardButton(BTN_CONTACT_MASTER)],
     ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=False)
+
+
+def phone_request_keyboard() -> ReplyKeyboardMarkup:
+    buttons = [
+        [KeyboardButton(BTN_SHARE_PHONE, request_contact=True)],
+        [KeyboardButton(BTN_SKIP_PHONE)],
+    ]
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=True)
 
 
 def master_menu_keyboard() -> ReplyKeyboardMarkup:

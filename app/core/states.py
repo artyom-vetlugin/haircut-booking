@@ -7,6 +7,7 @@ The draft_payload JSON dict carries intermediate data for multi-step flows.
 IDLE = "idle"
 
 # Booking flow
+BOOKING_REQUEST_PHONE = "booking:request_phone"
 BOOKING_SELECT_DATE = "booking:select_date"
 BOOKING_SELECT_SLOT = "booking:select_slot"
 BOOKING_CONFIRM = "booking:confirm"

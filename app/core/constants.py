@@ -8,6 +8,10 @@ BTN_RESCHEDULE = "Перенести запись"
 BTN_CANCEL = "Отменить запись"
 BTN_CONTACT_MASTER = "Связаться с мастером"
 
+# Phone request button labels (Russian)
+BTN_SHARE_PHONE = "📱 Поделиться номером"
+BTN_SKIP_PHONE = "Пропустить"
+
 # Master menu button labels (Russian)
 BTN_MASTER_BOOK_CLIENT      = "Записать клиента"
 BTN_MASTER_ALL_APPOINTMENTS = "Все записи"
