@@ -1,14 +1,23 @@
 """System prompt for the Claude booking agent."""
 
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from app.core.config import settings
 
+if TYPE_CHECKING:
+    from app.db.models import Appointment
 
-def build_system_prompt() -> str:
-    tz = ZoneInfo(settings.app_timezone)
-    now = datetime.now(tz=tz)
+
+def build_system_prompt(
+    current_appointment: "Appointment | None" = None,
+    tz: "ZoneInfo | None" = None,
+) -> str:
+    _tz = tz or ZoneInfo(settings.app_timezone)
+    now = datetime.now(tz=_tz)
     today = now.strftime("%d %B %Y")
     raw_offset = now.strftime("%z")  # e.g. "+0500"
     utc_offset = f"{raw_offset[:3]}:{raw_offset[3:]}"  # e.g. "+05:00"
@@ -19,7 +28,7 @@ def build_system_prompt() -> str:
         else "Контакт мастера указан в профиле бота."
     )
 
-    return f"""\
+    base_prompt = f"""\
 Ты — вежливый ассистент Telegram-бота для записи на стрижку. Общаешься исключительно на русском языке.
 Сегодняшняя дата: {today}. Часовой пояс: {settings.app_timezone} (UTC{utc_offset}).
 {contact_line}
@@ -33,12 +42,12 @@ def build_system_prompt() -> str:
 4. Если намерение пользователя неясно — задай короткий уточняющий вопрос или предложи меню.
 5. Отвечай кратко и естественно. Не добавляй лишних подтверждений до получения ответа от инструмента.
 6. Как только create_booking или reschedule_appointment вернул успешный результат (начинается с «Запись создана» или «Запись перенесена»), сразу ответь пользователю подтверждением и заверши обработку. Не вызывай get_available_slots и другие инструменты после успешного бронирования.
-7. Всегда вызывай get_my_appointment для получения актуального статуса записи. Никогда не используй историю переписки как источник информации о наличии или отсутствии записи у пользователя.
+7. Статус записи клиента указан в разделе «АКТУАЛЬНАЯ ЗАПИСЬ КЛИЕНТА» ниже — это единственный достоверный источник. Никогда не используй историю переписки как источник информации о наличии или отсутствии записи.
 8. Никогда не предлагай конкретное время для переноса без предварительного вызова get_available_slots. Даже если пользователь назвал желаемое время — сначала проверь его доступность через get_available_slots.
 
 СЦЕНАРИИ:
-- Записаться → сначала get_my_appointment; если запись уже есть — сообщи об этом и спроси, хочет ли пользователь перенести или отменить текущую запись (не называй конкретное время); если записи нет → get_available_slots → предложи конкретное время → дождись подтверждения → create_booking → подтверди результат
-- Моя запись → get_my_appointment
+- Записаться → если в разделе «АКТУАЛЬНАЯ ЗАПИСЬ КЛИЕНТА» указана активная запись — сообщи об этом и спроси, хочет ли пользователь перенести или отменить; если записи нет → get_available_slots → предложи конкретное время → дождись подтверждения → create_booking → подтверди результат
+- Моя запись → ответь на основе раздела «АКТУАЛЬНАЯ ЗАПИСЬ КЛИЕНТА»
 - Перенести (в любом контексте) → get_available_slots для нужной даты → предложи время только из полученного списка → подтверждение → reschedule_appointment → подтверди результат
 - Отменить → cancel_appointment (если пользователь явно попросил отменить)
 - Связаться с мастером / как позвонить / контакт мастера → сообщи контактный телефон мастера из строки выше; не вызывай никаких инструментов
@@ -51,3 +60,17 @@ def build_system_prompt() -> str:
 - После успешного действия — подтверди результат.
 - При ошибке — честно сообщи и предложи попробовать снова.
 """
+
+    if current_appointment is not None:
+        local = current_appointment.start_at.astimezone(_tz)
+        appt_block = (
+            f"\nАКТУАЛЬНАЯ ЗАПИСЬ КЛИЕНТА (получена из базы данных прямо перед этим сообщением): "
+            f"{local.strftime('%d.%m.%Y в %H:%M')}."
+        )
+    else:
+        appt_block = (
+            "\nАКТУАЛЬНАЯ ЗАПИСЬ КЛИЕНТА (получена из базы данных прямо перед этим сообщением): "
+            "нет активных записей."
+        )
+
+    return base_prompt + appt_block

@@ -8,10 +8,14 @@ flow and delegates everything else to AgentService.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from app.core import states
 from app.integrations.anthropic.agent_service import AgentService
 from app.use_cases.deps import HandlerServices
+
+if TYPE_CHECKING:
+    from app.db.models import Appointment
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +69,24 @@ class HandleFreeTextMessageUseCase:
         session = await services.session_repo.get_by_telegram_user_id(telegram_user_id)
         history = (session.conversation_history if session is not None else None) or []
 
+        current_appointment: "Appointment | None" = None
+        try:
+            client = await services.client_repo.get_by_telegram_user_id(telegram_user_id)
+            if client is not None:
+                current_appointment = (
+                    await services.appointment_service.get_future_appointment_for_client(
+                        client.id
+                    )
+                )
+        except Exception:
+            logger.exception(
+                "Failed to pre-fetch appointment for user %s; proceeding without it",
+                telegram_user_id,
+            )
+
         reply, new_history = await self._agent.handle_message(
-            telegram_user_id, user_text, services, history=history
+            telegram_user_id, user_text, services, history=history,
+            current_appointment=current_appointment,
         )
 
         try:

@@ -13,7 +13,7 @@ layer; Claude cannot claim success before a tool confirms it.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.integrations.anthropic.claude_client import ClaudeClient
 from app.integrations.anthropic.prompts import build_system_prompt
@@ -21,6 +21,9 @@ from app.integrations.anthropic.tool_definitions import ALL_TOOLS
 from app.tools.booking_tools import ToolContext
 from app.tools.tool_executor import execute_tool
 from app.use_cases.deps import HandlerServices
+
+if TYPE_CHECKING:
+    from app.db.models import Appointment
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +47,7 @@ class AgentService:
         user_text: str,
         services: HandlerServices,
         history: list[dict[str, Any]] | None = None,
+        current_appointment: "Appointment | None" = None,
     ) -> tuple[str, list[dict[str, Any]]]:
         """Process a free-text user message and return (reply, updated_history).
 
@@ -71,7 +75,10 @@ class AgentService:
                 response = await self._client.complete(
                     messages=messages,
                     tools=ALL_TOOLS,
-                    system=build_system_prompt(),
+                    system=build_system_prompt(
+                        current_appointment=current_appointment,
+                        tz=ctx.rules.timezone,
+                    ),
                 )
             except Exception:
                 logger.exception(
