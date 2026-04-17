@@ -75,7 +75,7 @@ All booking rules live here. Nothing outside this layer enforces them.
 | `BookingRulesService` | Stateless rule checks: working day/hours, minimum notice, booking horizon |
 | `AvailabilityService` | Generates candidate 1-hour slots, filters by rules and busy intervals |
 | `AppointmentService` | Full booking lifecycle: one-appointment rule, overlap check, calendar write, DB write, audit log, master notification |
-| `NotificationService` | Sends Telegram messages to the master's chat ID |
+| `NotificationService` | Sends Telegram messages to the master (new/reschedule/cancel events) and to the client when the master cancels or reschedules their appointment |
 
 `AppointmentService` writes to the calendar adapter **before** writing to the database. If the calendar write fails, the booking is aborted. If a subsequent step fails (DB write, notification), the error is propagated or swallowed safely — the calendar event is the primary record for the master.
 

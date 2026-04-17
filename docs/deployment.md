@@ -14,6 +14,8 @@ Copy `.env.example` to `.env` and fill in all required values before running the
 | `TELEGRAM_WEBHOOK_SECRET` | recommended | Secret token checked in `X-Telegram-Bot-Api-Secret-Token` header. |
 | `GOOGLE_CALENDAR_ID` | yes (prod) | ID of the dedicated appointments calendar. |
 | `GOOGLE_OAUTH_CREDENTIALS_PATH` | yes (prod) | Absolute path to `gcp-oauth.keys.json`. |
+| `MASTER_CONTACT_PHONE` | no | Master's phone number shown to clients via the "Связаться с мастером" intent. |
+| `GOOGLE_CALENDAR_ACCOUNT` | no | MCP account name for write operations. Run `npx @cocal/google-calendar-mcp list-accounts` to list options. Defaults to `normal`. |
 | `ANTHROPIC_MODEL` | no | Defaults to `claude-sonnet-4-6`. |
 | `APP_ENV` | no | `development` or `production`. |
 | `DEBUG` | no | `true` enables verbose logging and `/docs` UI. |
