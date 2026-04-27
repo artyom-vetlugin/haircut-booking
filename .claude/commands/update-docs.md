@@ -18,3 +18,4 @@ Rules:
 - Do not add speculative content or TODOs
 - Keep the Russian-language bot context in mind (e.g. don't anglicize UX descriptions)
 - If a section needs a large rewrite, summarize the proposed change and ask before proceeding
+- If a doc file is missing entirely, note it and ask whether to create it rather than creating it silently
