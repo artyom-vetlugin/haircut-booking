@@ -1,0 +1,33 @@
+services:
+  app:
+    image: ghcr.io/${GITHUB_REPOSITORY_LOWER}/haircut-booking:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"   # loopback only — nginx proxies externally
+    env_file:
+      - /opt/haircut-booking/.env
+    volumes:
+      - /opt/haircut-booking/secrets:/secrets:ro
+      - /opt/haircut-booking/mcp-tokens:/home/appuser/.config:rw
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # No ports exposed — only reachable by app container on the Docker network
+
+volumes:
+  postgres_data:
