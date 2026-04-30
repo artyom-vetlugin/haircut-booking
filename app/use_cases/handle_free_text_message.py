@@ -8,6 +8,7 @@ flow and delegates everything else to AgentService.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from app.core import states
@@ -68,6 +69,10 @@ class HandleFreeTextMessageUseCase:
 
         session = await services.session_repo.get_by_telegram_user_id(telegram_user_id)
         history = (session.conversation_history if session is not None else None) or []
+        if session is not None and history:
+            age = datetime.now(tz=timezone.utc) - session.updated_at
+            if age > timedelta(hours=24):
+                history = []
 
         current_appointment: "Appointment | None" = None
         try:

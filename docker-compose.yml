@@ -7,11 +7,13 @@ services:
       - .env
     environment:
       DATABASE_URL: "postgresql+asyncpg://postgres:postgres@db:5432/haircut_booking"
+      GOOGLE_OAUTH_CREDENTIALS_PATH: "/app/gcp-oauth.keys.json"
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - .:/app
+      - ~/.config/google-calendar-mcp:/root/.config/google-calendar-mcp
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   db:
